@@ -10,6 +10,8 @@ Docker is the only pre-requisite. This workshop works with Docker native in any 
 
 Both Jenkins and SonarQube servers are required for running the pipelines and code inspection. Although there are many ways to have Jenkins and SonarQube up and running, this is probably the easiest, fastest one -- running them as Docker containers:
 
+    docker network create ci
+
     docker run --name ci-jenkins \
         --user root \
         --detach \
@@ -46,6 +48,8 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
         sonarqube:6.7.6-community -Dsonar.web.context=/sonarqube
 
 Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
+
+Sometimes, Docker daemon is in a different folder. In those cases, use path `/usr/bin/docker`.
 
 ## The anatomy of a Jenkins pipeline
 
