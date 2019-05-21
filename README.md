@@ -84,7 +84,7 @@ Press `OK` when finished to save the credentials in the store.
 
 A Jenkins pipeline, written in the form of a declarative pipeline with a rich DSL and semantics, the *Jenkinsfile*, is a model for any process, understood as a sucession of stages and steps, sequential, parallel or any combinatiof both. In this context, the process is a build process, following the principles of continuous integration, continuous code inspection and continuous testing (continuous integration pipeline, for short).
 
-Jenkins pipelines are written in Groovy, and the pipeline DSL is designed to be pluggable, so any given may contribute with its own idioms to the pipeline DSL, as well as extended through custom functions bundled in Jenkins libraries.
+Jenkins pipelines are written in Groovy, and the pipeline DSL is designed to be pluggable, so any given plugin may contribute with its own idioms to the pipeline DSL, as well as extended through custom functions bundled in Jenkins libraries.
 
 The combination of a powerful dynamic language as Groovy, with the rich semantics of the available DSLs, allows developers to write simple, expressive pipelines, while having all freedom to customize the pipeline behavior up to the smallest detail.
 
