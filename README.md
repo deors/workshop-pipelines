@@ -59,15 +59,19 @@ On first run, Jenkins will show a wizard to configure the instance. This configu
 
 The first step is to confirm the initial administrator password which is kept safe in the `ci-jenkins-home` volume. Simply navigate to the right folder inside the volume, and take note of the initial password.
 
-Next step is to install an initial selection of plug-ins. Starting with the suggested plug-ins is generally a good idea.
+Next step is to install an initial selection of plugins. Starting with the suggested plugins is generally a good idea.
 
-Finally, create the first administrator user. Take note of the user and password as it will be required to login into Jenkins from now on.
+To complete the wizard, create the first administrator user. Take note of the user and password as it will be required to login into Jenkins from now on.
+
+Once the wizard finishes the initial configuration, there are few other plugins that will be used in the workshop. To install them, click in `Manage Jenkins` menu option and next click on `Manage Plugins` menu option. In the Available tab, search for the required plugins, click the selection checkbox and then, at the bottom of the page, select the action `Install without restart`. The plugins needed are:
+
+- `SonarQube Scanner`
 
 ## The anatomy of a Jenkins pipeline
 
 A Jenkins pipeline, written in the form of a declarative pipeline with a rich DSL and semantics, the *Jenkinsfile*, is a model for any process, understood as a sucession of stages and steps, sequential, parallel or any combinatiof both. In this context, the process is a build process, following the principles of continuous integration, continuous code inspection and continuous testing (continuous integration pipeline, for short).
 
-Jenkins pipelines are written in Groovy, and the pipeline DSL is designed to be pluggable, so any given plugin may contribute with its own idioms to the pipeline DSL, as well as extended through custom functions bundled in Jenkins libraries.
+Jenkins pipelines are written in Groovy, and the pipeline DSL is designed to be pluggable, so any given may contribute with its own idioms to the pipeline DSL, as well as extended through custom functions bundled in Jenkins libraries.
 
 The combination of a powerful dynamic language as Groovy, with the rich semantics of the available DSLs, allows developers to write simple, expressive pipelines, while having all freedom to customize the pipeline behavior up to the smallest detail.
 
