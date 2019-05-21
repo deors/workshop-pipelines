@@ -1,6 +1,8 @@
-# workshop-pipelines-hackersweek6
+# workshop-pipelines
 
-Taller sobre pipelines de entrega continua con Jenkins y Docker para Hackers Week 6 en la UMA
+Workshop about CI/CD pipelines with Jenkins and Docker.
+
+Workshop delivered in UMA Hackers Week 6 and in Opensouthcode 2019.
 
 ## Preparing for the workshop
 
