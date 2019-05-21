@@ -63,9 +63,21 @@ Next step is to install an initial selection of plugins. Starting with the sugge
 
 To complete the wizard, create the first administrator user. Take note of the user and password as it will be required to login into Jenkins from now on.
 
-Once the wizard finishes the initial configuration, there are few other plugins that will be used in the workshop. To install them, click in `Manage Jenkins` menu option and next click on `Manage Plugins` menu option. In the Available tab, search for the required plugins, click the selection checkbox and then, at the bottom of the page, select the action `Install without restart`. The plugins needed are:
+Once the wizard finishes the initial configuration, there are few other plugins that will be used in the workshop. To install them, click on `Manage Jenkins` menu option and next click on `Manage Plugins` menu option. In the Available tab, search for the required plugins, click the selection checkbox and then, at the bottom of the page, select the action `Install without restart`. The plugins needed are:
 
 - `SonarQube Scanner`
+
+### Configuring credentials for Docker Hub
+
+At a later point during the pipeline execution, validated Docker images are going to be published into Docker Hub. For that to be possible, credentials must be configured before using Jenkins credentials manager.
+
+To add the credentials, click on `Credentials` menu option, and then click on the Jenkins global store.
+
+Next, click on `Add Credentials` menu option and then enter the credentials needed to access Docker Hub.
+
+In the `ID` field, enter the credential id as it is going to be referenced from the pipeline, e.g. `deors-docker-hub` where `deors` is the organization name in Docker Hub.
+
+Press `OK` when finished to save the credentials in the store.
 
 ## The anatomy of a Jenkins pipeline
 
