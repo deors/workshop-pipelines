@@ -51,7 +51,7 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
 
 Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
 
-Sometimes, Docker daemon is in a different folder. In those cases, use path /usr/bin/docker.
+Sometimes, Docker daemon is in a different folder. In those cases, use path `/usr/bin/docker`.
 
 ### Jenkins configuration
 
