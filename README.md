@@ -24,7 +24,7 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
         --mount type=bind,source=/usr/local/bin/docker,target=/usr/local/bin/docker \
         --env JAVA_OPTS="-Xmx2048M" \
         --env JENKINS_OPTS="--prefix=/jenkins" \
-        jenkins/jenkins:2.150.3
+        jenkins/jenkins:2.164.3
 
     docker run --name ci-sonarqube-data \
         --detach \
@@ -52,6 +52,16 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
 Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
 
 Sometimes, Docker daemon is in a different folder. In those cases, use path /usr/bin/docker.
+
+### Jenkins configuration
+
+On first run, Jenkins will show a wizard to configure the instance. This configuration needs to be done only on first run.
+
+The first step is to confirm the initial administrator password which is kept safe in the `ci-jenkins-home` volume. Simply navigate to the right folder inside the volume, and take note of the initial password.
+
+Next step is to install an initial selection of plug-ins. Starting with the suggested plug-ins is generally a good idea.
+
+Finally, create the first administrator user. Take note of the user and password as it will be required to login into Jenkins from now on.
 
 ## The anatomy of a Jenkins pipeline
 
