@@ -68,6 +68,7 @@ Once the wizard finishes the initial configuration, there are few other plugins 
 - `SonarQube Scanner`
 - `JaCoCo`
 - `Performance`
+- `OWASP Dependency-Check
 
 ### Configuring credentials for Docker Hub
 
