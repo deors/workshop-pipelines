@@ -355,7 +355,7 @@ Besides the addition of the plugin, and optionally enabling the automatic execut
             <plugin>
                 <groupId>com.lazerycode.jmeter</groupId>
                 <artifactId>jmeter-maven-plugin</artifactId>
-                <version>2.8.5</version>
+                <version>2.9.0</version>
                 <configuration>
                     <testResultsTimestamp>false</testResultsTimestamp>
                     <propertiesUser>
@@ -443,7 +443,7 @@ OWASP is a global organization focused on secure development practices. OWASP al
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>3.3.2</version>
+                <version>5.0.0-M3</version>
                 <configuration>
                     <format>ALL</format>
                 </configuration>
@@ -461,7 +461,7 @@ To ensure that unsecure vulnerabilities are not carried onto a live environment,
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>3.3.2</version>
+                <version>5.0.0-M3</version>
                 <configuration>
                     <format>ALL</format>
                     <failBuildOnCVSS>5</failBuildOnCVSS>
@@ -499,7 +499,7 @@ First, the pipeline is opened with the agent to be used for the build execution,
 pipeline {
     agent {
         docker {
-            image 'adoptopenjdk/openjdk11:jdk-11.0.2.9'
+            image 'adoptopenjdk/openjdk11:jdk-11.0.3_7'
             args '--network ci'
         }
     }
@@ -526,7 +526,7 @@ As the build is currently configured, it will run completely clean every time, i
     ...
     agent {
         docker {
-            image 'adoptopenjdk/openjdk11:jdk-11.0.2.9'
+            image 'adoptopenjdk/openjdk11:jdk-11.0.3_7'
             args '--network ci --mount type=volume,source=ci-maven-home,target=/root/.m2'
         }
     }
