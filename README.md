@@ -65,10 +65,10 @@ To complete the wizard, create the first administrator user. Take note of the us
 
 Once the wizard finishes the initial configuration, there are few other plugins that will be used in the workshop. To install them, click on `Manage Jenkins` menu option and next click on `Manage Plugins` menu option. In the Available tab, search for the required plugins, click the selection checkbox and then, at the bottom of the page, select the action `Install without restart`. The plugins needed are:
 
-- `SonarQube Scanner`
 - `JaCoCo`
+- `OWASP Dependency-Check`
 - `Performance`
-- `OWASP Dependency-Check
+- `SonarQube Scanner`
 
 ### Configuring credentials for Docker Hub
 
