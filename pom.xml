@@ -293,7 +293,7 @@
                 <version>${dependency-check.version}</version>
                 <configuration>
                     <format>ALL</format>
-                    <failBuildOnCVSS>5</failBuildOnCVSS>
+                    <!--<failBuildOnCVSS>5</failBuildOnCVSS>-->
                 </configuration>
             </plugin>
         </plugins>
