@@ -36,7 +36,7 @@
         <pitest.version>1.4.5</pitest.version>
         <pitest-junit5.version>0.8</pitest-junit5.version>
         <jmeter.version>2.9.0</jmeter.version>
-        <dependency-check.version>3.3.2</dependency-check.version>
+        <dependency-check.version>5.0.0-M3</dependency-check.version>
 
         <jmockit.path>${settings.localRepository}/org/jmockit/jmockit/${jmockit.version}/jmockit-${jmockit.version}.jar</jmockit.path>
         <jmockit.agentConfig>-javaagent:${jmockit.path}</jmockit.agentConfig>
