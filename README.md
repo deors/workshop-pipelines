@@ -51,7 +51,28 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
 
 Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
 
-Sometimes, Docker daemon is in a different folder. In those cases, use path `/usr/bin/docker`.
+Depending on the underlying OS, Docker daemon might be in a different folder. In those cases, use path `/usr/bin/docker`.
+
+Also depending on the OS, there is one library required to run Docker, `libltdl`, which might not be available to the container by default. In those cases, a new binding must be added. The target binding is a bit tricky because the expected path may differ across distributions. To guess where it might be expected, the following commands, executed in the host where Docker is running, might be of help:
+
+    ldd /usr/bin/docker
+
+    docker exec ci-jenkins ldd /usr/bin/docker
+
+Once known, the command to create Jenkins container should include the extra binding. For example, this is the case when installing Jenkins in an Amazon Linux 2 VM running on AWS EC2:
+
+    docker run --name ci-jenkins \
+        --user root \
+        --detach \
+        --network ci \
+        --publish 9080:8080 --publish 50000:50000 \
+        --mount type=volume,source=ci-jenkins-home,target=/var/jenkins_home \
+        --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
+        --mount type=bind,source=/usr/bin/docker,target=/usr/bin/docker \
+        --mount type=bind,source=/usr/lib64/libltdl.so.7,target=/lib/x86_64-linux-gnu/libltdl.so.7 \
+        --env JAVA_OPTS="-Xmx2048M" \
+        --env JENKINS_OPTS="--prefix=/jenkins" \
+        jenkins/jenkins:2.164.3
 
 ### Jenkins configuration
 
