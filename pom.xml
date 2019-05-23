@@ -35,7 +35,7 @@
         <selenium-htmlunit.version>2.33.3</selenium-htmlunit.version>
         <pitest.version>1.4.5</pitest.version>
         <pitest-junit5.version>0.8</pitest-junit5.version>
-        <jmeter.version>2.8.5</jmeter.version>
+        <jmeter.version>2.9.0</jmeter.version>
         <dependency-check.version>3.3.2</dependency-check.version>
 
         <jmockit.path>${settings.localRepository}/org/jmockit/jmockit/${jmockit.version}/jmockit-${jmockit.version}.jar</jmockit.path>
