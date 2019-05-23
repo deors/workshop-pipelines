@@ -70,6 +70,24 @@ Once the wizard finishes the initial configuration, there are few other plugins 
 - `Performance`
 - `SonarQube Scanner`
 
+### SonarQube configuration
+
+To integrate SonarQube with Jenkins, the Jenkins plugin must be configured to reach out to the right SonarQube instance when required.
+
+To configure that integration, click on `Manage Jenkins` menu option and next click on `Configure System` menu option. Scroll down until the section `SonarQube Servers` is visible. Click the checkbox to allow injection of server configuration.
+
+Next, configure the SonarQube instance name and URL. To align configuration with the expected instance name requested later during pipeline run time, enter `ci-sonarqube` for the instance name, and for the server URL, the SonarQube home URL. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9000/sonarqube`
+
+Click the `Save` button and configuration on the Jenkins side is ready.
+
+Once configuration is done on the Jenkins side, it is time to complete the other side of the integration in SonarQube.
+
+Login to SonarQube using the default credentials: both username and password are simply `admin`. On first run, a tutorial wizard will show that can be skipped.
+
+Click on `Administration` on the top menu and afterwards on `Webhooks` on the left menu. Enter `ci-jenkins` for the webhook name, and for the URL, the Jenkins home URL appending `/sonarqube-webhook`. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9080/jenkins/sonarqube-webhook`.
+
+Click the `Save` button and configuration on the SonarQube side is ready.
+
 ### Configuring credentials for Docker Hub
 
 At a later point during the pipeline execution, validated Docker images are going to be published into Docker Hub. For that to be possible, credentials must be configured before using Jenkins credentials manager.
