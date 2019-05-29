@@ -761,9 +761,9 @@ For dependency check, it is possible to include a quality gate in the `dependenc
         ...
 ```
 
-It's worth noting that the code analysis and calculation of the quality gate by SonarQube is an asynchronous proces. Depending on SonarQube server load, it might take some time for results to be available, and as a design decision, the `sonar:sonar` goal will not wait, blocking the build, until then. This has the beneficial side effect that the Jenkins executor is not blocked and other builds might be built in the meantime, maximizing utilization of Jenkins build farm resources.
+It's worth noting that the code analysis and calculation of the quality gate by SonarQube is an asynchronous process. Depending on SonarQube server load, it might take some time for results to be available, and as a design decision, the `sonar:sonar` goal will not wait, blocking the build, until then. This has the beneficial side effect that the Jenkins executor is not blocked and other builds might be built in the meantime, maximizing the utilization of Jenkins build farm resources.
 
-The default behavior for SonarQube quality gate, as coded in the `waitForQualityGate` function,  is to break the build in case or warning or error. However, it is better to fail the build only when the quality gate is in error status. To code that behavior in the pipeline, there is a custom `script` block coding that logic.
+The default behavior for SonarQube quality gate, as coded in the `waitForQualityGate` function, is to break the build in case or warning or error. However, it is better to fail the build only when the quality gate is in error status. To code that behavior in the pipeline, there is a custom `script` block coding that logic.
 
 ### The pipeline code 6: Pushing the Docker image
 
