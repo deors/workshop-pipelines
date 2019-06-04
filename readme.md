@@ -747,7 +747,7 @@ The next two stages will check dependencies for known security vulnerabilities, 
     ...
 ```
 
-For dependency check, it is possible to include a quality gate in the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable. As an example, this is a quality gate flagging the build as unstable in case of more than one high severity or more than 5 normal severity issues, and failing the build if there are at least one high severity or more than 2 normal severity issues.
+For dependency check, it is possible to include a quality gate in the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable. As an example, this is a quality gate flagging the build as unstable if there are at least one high severity or at least one normal severity issues, and failing the build if there are more than 2 high severity or more than 5 normal severity issues.
 
 ```groovy
         ...
@@ -755,7 +755,7 @@ For dependency check, it is possible to include a quality gate in the `dependenc
             steps {
                 echo "-=- run dependency vulnerability tests -=-"
                 sh "./mvnw dependency-check:check"
-                dependencyCheckPublisher failedTotalHigh: '0', unstableTotalHigh: '1', failedTotalNormal: '2', unstableTotalNormal: '5'
+                dependencyCheckPublisher failedTotalHigh: '2', unstableTotalHigh: '0', failedTotalNormal: '5', unstableTotalNormal: '0'
             }
         }
         ...
