@@ -53,27 +53,6 @@ Note that the preceding commands will set up persistent volumes so all configura
 
 Depending on the underlying OS, Docker daemon might be in a different folder. In those cases, use path `/usr/bin/docker`.
 
-Also depending on the OS, there is one library required to run Docker, `libltdl`, which might not be available to the container by default. In those cases, a new binding must be added. The target binding is a bit tricky because the expected path may differ across distributions. To guess where it might be expected, the following commands, executed in the host where Docker is running, might be of help:
-
-    ldd /usr/bin/docker
-
-    docker exec ci-jenkins ldd /usr/bin/docker
-
-Once known, the command to create Jenkins container should include the extra binding. For example, this is the case when installing Jenkins in an Amazon Linux 2 VM running on AWS EC2:
-
-    docker run --name ci-jenkins \
-        --user root \
-        --detach \
-        --network ci \
-        --publish 9080:8080 --publish 50000:50000 \
-        --mount type=volume,source=ci-jenkins-home,target=/var/jenkins_home \
-        --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
-        --mount type=bind,source=/usr/bin/docker,target=/usr/bin/docker \
-        --mount type=bind,source=/usr/lib64/libltdl.so.7,target=/lib/x86_64-linux-gnu/libltdl.so.7 \
-        --env JAVA_OPTS="-Xmx2048M" \
-        --env JENKINS_OPTS="--prefix=/jenkins" \
-        jenkins/jenkins:2.164.3
-
 ### Jenkins configuration
 
 On first run, Jenkins will show a wizard to configure the instance. This configuration needs to be done only on first run.
@@ -86,6 +65,8 @@ To complete the wizard, create the first administrator user. Take note of the us
 
 Once the wizard finishes the initial configuration, there are few other plugins that will be used in the workshop. To install them, click on `Manage Jenkins` menu option and next click on `Manage Plugins` menu option. In the Available tab, search for the required plugins, click the selection checkbox and then, at the bottom of the page, select the action `Install without restart`. The plugins needed are:
 
+- `Docker Pipeline`
+- `Pipeline Utility Steps`
 - `JaCoCo`
 - `OWASP Dependency-Check`
 - `Performance`
@@ -95,31 +76,39 @@ Once the wizard finishes the initial configuration, there are few other plugins 
 
 To integrate SonarQube with Jenkins, the Jenkins plugin must be configured to reach out to the right SonarQube instance when required.
 
-To configure that integration, click on `Manage Jenkins` menu option and next click on `Configure System` menu option. Scroll down until the section `SonarQube Servers` is visible. Click the checkbox to allow injection of server configuration.
+Before configuring that integration, a SonarQube API token must be created. That token is required to authenticate requests coming from Jenkins.
 
-Next, configure the SonarQube instance name and URL. To align configuration with the expected instance name requested later during pipeline run time, enter `ci-sonarqube` for the instance name, and for the server URL, the SonarQube home URL. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9000/sonarqube`
+Login to SonarQube using the default credentials: both username and password are simply `admin`. On first run, a tutorial wizard will show but it can be skipped for now.
 
-Click the `Save` button and configuration on the Jenkins side is ready.
+Click on `Administration` on the top menu and afterwards on `Security` and `Users` in the horizonal menu below. In the `Administrator` user configuration row, there is a menu icon to the right with the label `Update Tokens`. Click on it, and in the pop-up dialog, in the text box below `Generate Tokens` enter `ci-sonarqube` (or any other meaningful name) and press the `Generate` button. The API token will be shown below. Take note of it, as this is the last time it will be shown in the UI.
 
-Once configuration is done on the Jenkins side, it is time to complete the other side of the integration in SonarQube.
-
-Login to SonarQube using the default credentials: both username and password are simply `admin`. On first run, a tutorial wizard will show that can be skipped.
+Before leaving SonarQube, let's configure the webhook that will be leveraged by SonarQube to let Jenkins know that a requested analysis has finished.
 
 Click on `Administration` on the top menu and afterwards on `Webhooks` on the left menu. Enter `ci-jenkins` for the webhook name, and for the URL, the Jenkins home URL appending `/sonarqube-webhook`. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9080/jenkins/sonarqube-webhook`.
 
 Click the `Save` button and configuration on the SonarQube side is ready.
 
+Login to Jenkins with the previously configured administrator credentials.
+
+Click on `Manage Jenkins` menu option and next click on `Manage Credentials` menu option. In the credentials store table, click on the link labeled as `(global)` for the Jenkins global domain.
+
+Next, click on `Add Credentials` in the left menu. In the credential kind select `Secret text`. The secret value is the API token just generated. The secret id can be `ci-sonarqube` as well. Press `Create` when finished to save the credentials in the store.
+
+Now, let's configure the SonarQube server integration. Go back to the dashboard, click on `Manage Jenkins` menu option and next click on `Configure System` menu option. Scroll down until the section `SonarQube Servers` is visible. Click the checkbox to allow injection of server configuration.
+
+Next, let's add the SonarQube instance name and URL. To ensure that the right server is used by the pipeline use `ci-sonarqube` for the instance name. If the selected name is different, it should match the name referenced in the pipeline later. For the server URL, use the SonarQube home URL. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9000/sonarqube`. Finally, for the server authentication token, use the API token stored in the `ci-sonarqube` credential created before.
+
+Click the `Save` button and configuration on the Jenkins side is ready.
+
 ### Configuring credentials for Docker Hub
 
-At a later point during the pipeline execution, validated Docker images are going to be published into Docker Hub. For that to be possible, credentials must be configured before using Jenkins credentials manager.
+At a later point during the pipeline execution, validated Docker images are going to be published into Docker Hub. For that to be possible, Docker Hub credential must be configured before using Jenkins credentials manager.
 
-To add the credentials, click on `Credentials` menu option, and then click on the Jenkins global store.
+Click on `Manage Jenkins` menu option and next click on `Manage Credentials` menu option, and then click on the link labeled as `(global)` for the Jenkins global domain. This is the same domain where the SonarQube API token was configured before.
 
-Next, click on `Add Credentials` menu option and then enter the credentials needed to access Docker Hub.
+Next, click on `Add Credentials` in the left menu and enter the credentials needed to access Docker Hub.
 
-In the `ID` field, enter the credential id as it is going to be referenced from the pipeline, e.g. `deors-docker-hub` where `deors` is the organization name in Docker Hub.
-
-Press `OK` when finished to save the credentials in the store.
+In the `ID` field, enter the credential id as it is going to be referenced from the pipeline, e.g. use `myorgname-docker-hub` where `myorgname` is the organization name in Docker Hub. Press `Create` when finished to save the credentials in the store.
 
 ## The anatomy of a Jenkins pipeline
 
