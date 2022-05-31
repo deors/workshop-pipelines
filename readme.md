@@ -656,7 +656,9 @@ The next two stages will check dependencies for known security vulnerabilities, 
     ...
 ```
 
-For dependency check, it is possible to include a quality gate in the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable. The example below shows a quality gate flagging the build as unstable if there are at least one high severity or at least one medium severity issues, and failing the build if there are at least 1 critical severity issue, or more than 2 high or more than 5 medium severity issues.
+For dependency check, it is possible to include a quality gate in the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable.
+
+As of the time of this update, Spring Boot 2.7.0 has 7 known vulnerabilities without a patch. The quality gate shown below will accept those vulnerabilities (3 critical, 4 medium severity) and will fail in case additional vulnerabilities are detected.
 
 However, the publisher function will not break the build immediately when found vulnerabilities exceed the configured threshold. To close that gap, a simple script can be added to the scan step:
 
@@ -666,7 +668,7 @@ However, the publisher function will not break the build immediately when found 
             steps {
                 echo '-=- run dependency vulnerability scan -=-'
                 sh './mvnw dependency-check:check'
-                dependencyCheckPublisher failedTotalCritical: '0', unstableTotalCritical: '0', failedTotalHigh: '2', unstableTotalHigh: '0', failedTotalMedium: '5', unstableTotalMedium: '0'
+                dependencyCheckPublisher failedTotalCritical: '4', unstableTotalCritical: '4', failedTotalHigh: '0', unstableTotalHigh: '0', failedTotalMedium: '5', unstableTotalMedium: '5'
                 script {
                     if (currentBuild.result == 'FAILURE') {
                         error('Dependency vulnerabilities exceed the configured threshold')
