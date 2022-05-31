@@ -218,13 +218,13 @@ To enable JUnit 5, it is needed to suppress the dependency on JUnit 4, and add t
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
-            <version>5.3.2</version>
+            <version>5.6.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.3.2</version>
+            <version>5.6.2</version>
             <scope>test</scope>
         </dependency>
         ...
@@ -243,7 +243,7 @@ First, the JaCoCo agent must be added as a Maven dependency in `pom.xml`:
         <dependency>
             <groupId>org.jacoco</groupId>
             <artifactId>org.jacoco.agent</artifactId>
-            <version>0.8.3</version>
+            <version>0.8.5</version>
             <classifier>runtime</classifier>
             <scope>test</scope>
         </dependency>
@@ -261,9 +261,9 @@ To enable the gathering of code coverage metrics during unit tests, the agent pr
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.1</version>
+                <version>2.22.2</version>
                 <configuration>
-                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.3/org.jacoco.agent-0.8.3-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
+                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.5/org.jacoco.agent-0.8.5-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
                     <excludes>
                         <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
@@ -299,14 +299,14 @@ As the application is packaged and runs as a Docker image, the agent file must b
                                 <artifactItem>
                                     <groupId>org.jacoco</groupId>
                                     <artifactId>org.jacoco.agent</artifactId>
-                                    <version>0.8.3</version>
+                                    <version>0.8.5</version>
                                     <classifier>runtime</classifier>
                                     <destFileName>jacocoagent.jar</destFileName>
                                 </artifactItem>
                                 <artifactItem>
                                     <groupId>org.jacoco</groupId>
                                     <artifactId>org.jacoco.cli</artifactId>
-                                    <version>0.8.3</version>
+                                    <version>0.8.5</version>
                                     <classifier>nodeps</classifier>
                                     <destFileName>jacococli.jar</destFileName>
                                 </artifactItem>
@@ -342,7 +342,7 @@ Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twi
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>2.22.1</version>
+                <version>2.22.2</version>
                 <configuration>
                     <includes>
                         <include>**/*IntegrationTest.java</include>
@@ -381,7 +381,7 @@ Besides the addition of the plugin, and optionally enabling the automatic execut
             <plugin>
                 <groupId>com.lazerycode.jmeter</groupId>
                 <artifactId>jmeter-maven-plugin</artifactId>
-                <version>2.9.0</version>
+                <version>3.0.0</version>
                 <configuration>
                     <testResultsTimestamp>false</testResultsTimestamp>
                     <propertiesUser>
@@ -422,7 +422,7 @@ As mutation testing works better with strict unit tests, the plugin configuratio
             <plugin>
                 <groupId>org.pitest</groupId>
                 <artifactId>pitest-maven</artifactId>
-                <version>1.4.5</version>
+                <version>1.5.2</version>
                 <configuration>
                     <excludedTestClasses>
                         <param>*ApplicationTests</param>
@@ -437,7 +437,7 @@ As mutation testing works better with strict unit tests, the plugin configuratio
                     <dependency>
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-junit5-plugin</artifactId>
-                        <version>0.8</version>
+                        <version>0.11</version>
                     </dependency>
                 </dependencies>
                 <!-- if activated, will run pitest automatically on integration-test goal -->
@@ -469,7 +469,7 @@ OWASP is a global organization focused on secure development practices. OWASP al
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>5.0.0-M3</version>
+                <version>5.3.2</version>
                 <configuration>
                     <format>ALL</format>
                 </configuration>
@@ -487,7 +487,7 @@ To ensure that unsecure vulnerabilities are not carried onto a live environment,
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>5.0.0-M3</version>
+                <version>5.3.2</version>
                 <configuration>
                     <format>ALL</format>
                     <failBuildOnCVSS>5</failBuildOnCVSS>
@@ -495,6 +495,8 @@ To ensure that unsecure vulnerabilities are not carried onto a live environment,
             </plugin>
             ...
 ```
+
+However, this approach is not recommended in favour of the finer grane configuration available inside the pipeline as explained later in this guide.
 
 ## Orchestrating the build - the continuous integration pipeline
 
@@ -525,7 +527,7 @@ First, the pipeline is opened with the agent to be used for the build execution,
 pipeline {
     agent {
         docker {
-            image 'adoptopenjdk/openjdk11:jdk-11.0.3_7'
+            image 'eclipse-temurin:11.0.15_10-jdk'
             args '--network ci'
         }
     }
@@ -552,7 +554,7 @@ As the build is currently configured, it will run completely clean every time, i
     ...
     agent {
         docker {
-            image 'adoptopenjdk/openjdk11:jdk-11.0.3_7'
+            image 'eclipse-temurin:11.0.15_10-jdk'
             args '--network ci --mount type=volume,source=ci-maven-home,target=/root/.m2'
         }
     }
@@ -717,13 +719,7 @@ The next two stages will check dependencies for known security vulnerabilities, 
                     sh "./mvnw sonar:sonar"
                 }
                 timeout(time: 10, unit: 'MINUTES') {
-                    //waitForQualityGate abortPipeline: true
-                    script {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK' && qg.status != 'WARN') {
-                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                        }
-                    }
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
