@@ -87,6 +87,11 @@ pipeline {
                 echo '-=- run dependency vulnerability scan -=-'
                 sh './mvnw dependency-check:check'
                 dependencyCheckPublisher failedTotalCritical: '0', unstableTotalCritical: '0', failedTotalHigh: '0', unstableTotalHigh: '0', failedTotalMedium: '5', unstableTotalMedium: '5'
+                script {
+                    if (currentBuild.result == 'FAILURE') {
+                        error('Dependency vulnerabilities exceed the configured threshold')
+                    }
+                }
             }
         }
 
