@@ -47,6 +47,10 @@
         <jacoco.utAgentConfig>-javaagent:${jacoco.path}=destfile=${jacoco.utReport}</jacoco.utAgentConfig>
         <jacoco.itAgentConfig>-javaagent:${jacoco.path}=destfile=${jacoco.itReport}</jacoco.itAgentConfig>
 
+        <jmeter.target.host>localhost</jmeter.target.host>
+        <jmeter.target.port>8080</jmeter.target.port>
+        <jmeter.target.root>/</jmeter.target.root>
+
         <compiler.version>3.8.1</compiler.version>
         <surefire.version>2.22.2</surefire.version>
         <failsafe.version>2.22.2</failsafe.version>
