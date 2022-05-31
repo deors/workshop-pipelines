@@ -35,7 +35,7 @@
         <pitest.version>1.8.0</pitest.version>
         <pitest-junit5.version>0.14</pitest-junit5.version>
         <jmeter-plugin.version>3.5.0</jmeter-plugin.version>
-        <jmeter.version>5.5.3</jmeter.version>
+        <jmeter.version>5.4.3</jmeter.version>
         <dependency-check.version>5.3.2</dependency-check.version>
 
         <jmockit.path>${settings.localRepository}/org/jmockit/jmockit/${jmockit.version}/jmockit-${jmockit.version}.jar</jmockit.path>
