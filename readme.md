@@ -207,7 +207,7 @@ First, the JaCoCo agent must be added as a Maven dependency in `pom.xml`:
         <dependency>
             <groupId>org.jacoco</groupId>
             <artifactId>org.jacoco.agent</artifactId>
-            <version>0.8.5</version>
+            <version>0.8.8</version>
             <classifier>runtime</classifier>
             <scope>test</scope>
         </dependency>
@@ -227,7 +227,7 @@ To enable the gathering of code coverage metrics during unit tests, the agent pr
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.22.2</version>
                 <configuration>
-                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.5/org.jacoco.agent-0.8.5-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
+                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.8/org.jacoco.agent-0.8.8-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
                     <excludes>
                         <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
@@ -263,14 +263,14 @@ As the application is packaged and runs as a Docker image, the agent file must b
                                 <artifactItem>
                                     <groupId>org.jacoco</groupId>
                                     <artifactId>org.jacoco.agent</artifactId>
-                                    <version>0.8.5</version>
+                                    <version>0.8.8</version>
                                     <classifier>runtime</classifier>
                                     <destFileName>jacocoagent.jar</destFileName>
                                 </artifactItem>
                                 <artifactItem>
                                     <groupId>org.jacoco</groupId>
                                     <artifactId>org.jacoco.cli</artifactId>
-                                    <version>0.8.5</version>
+                                    <version>0.8.8</version>
                                     <classifier>nodeps</classifier>
                                     <destFileName>jacococli.jar</destFileName>
                                 </artifactItem>
@@ -447,7 +447,7 @@ Once the pipeline to be created is known, it is the time of putting together all
 
 ### The pipeline code 1: Configuring the build execution environment
 
-First, the pipeline is opened with the agent to be used for the build execution, and the build properties that will be leveraged later during stage definition, to make stages reusable for every microservice in the system. As an example, let's create the pipeline for the configuration service:
+First, the pipeline must declare the agent to be used for the build execution, and the build properties that will be leveraged later during stage definition, to make stages reusable for every microservice in the system. In this case, the JDK 18 standard image from Eclipse Temurin project is used to run the build:
 
 ```groovy
 #!groovy
@@ -455,7 +455,7 @@ First, the pipeline is opened with the agent to be used for the build execution,
 pipeline {
     agent {
         docker {
-            image 'eclipse-temurin:11.0.15_10-jdk'
+            image 'eclipse-temurin:18.0.1_10-jdk'
             args '--network ci'
         }
     }
@@ -482,7 +482,7 @@ As the build is currently configured, it will run completely clean every time, i
     ...
     agent {
         docker {
-            image 'eclipse-temurin:11.0.15_10-jdk'
+            image 'eclipse-temurin:18.0.1_10-jdk'
             args '--network ci --mount type=volume,source=ci-maven-home,target=/root/.m2'
         }
     }

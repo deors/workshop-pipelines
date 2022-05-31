@@ -3,7 +3,7 @@
 pipeline {
     agent {
         docker {
-            image 'eclipse-temurin:11.0.15_10-jdk'
+            image 'eclipse-temurin:18.0.1_10-jdk'
             args '--network ci --mount type=volume,source=ci-maven-home,target=/root/.m2'
         }
     }

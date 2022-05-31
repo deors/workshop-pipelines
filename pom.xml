@@ -25,11 +25,11 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <java.version>11</java.version>
+        <java.version>18</java.version>
 
         <junit.version>5.8.2</junit.version> <!-- provided by spring-boot-starter-test pom -->
         <jmockit.version>1.49</jmockit.version>
-        <jacoco.version>0.8.5</jacoco.version>
+        <jacoco.version>0.8.8</jacoco.version>
         <selenium.version>4.2.0</selenium.version>
         <selenium-htmlunit.version>3.61.0</selenium-htmlunit.version>
         <pitest.version>1.5.2</pitest.version>
