@@ -1,4 +1,4 @@
-FROM adoptopenjdk/openjdk11:jdk-11.0.3_7
+FROM eclipse-temurin:11.0.15_10-jdk
 VOLUME /tmp
 ADD target/dependency/jacocoagent.jar jacocoagent.jar
 ADD target/workshop-pipelines.jar app.jar
