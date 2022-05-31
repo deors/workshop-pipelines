@@ -228,14 +228,6 @@
                         <root>${jmeter.target.root}</root>
                     </propertiesUser>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>configuration</id>
-                        <goals>
-                            <goal>configure</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
 
             <!-- dependency vulnerability scan -->
