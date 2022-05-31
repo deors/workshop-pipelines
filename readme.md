@@ -380,6 +380,14 @@ Besides the addition of the plugin, and optionally enabling the automatic execut
                         <root>${jmeter.target.root}</root>
                     </propertiesUser>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>configuration</id>
+                        <goals>
+                            <goal>configure</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             ...
         </plugins>
