@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.time.Duration;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -205,7 +206,7 @@ public class HelloServiceIntegrationTest {
 
     private void testHello(WebDriver driver, String baseUrl) {
 
-        WebElement body = (new WebDriverWait(driver, 10)).until(
+        WebElement body = (new WebDriverWait(driver, Duration.ofSeconds(10))).until(
             d -> {
                 d.get(baseUrl + "hello");
                 return d.findElement(By.xpath("/html/body"));
