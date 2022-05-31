@@ -15,10 +15,10 @@ import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.edge.EdgeOptions;
 import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.htmlunit.HtmlUnitDriver;
 import org.openqa.selenium.ie.InternetExplorerOptions;
-import org.openqa.selenium.opera.OperaOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
@@ -36,7 +36,7 @@ public class HelloServiceIntegrationTest {
 
     protected static boolean RUN_CHROME;
 
-    protected static boolean RUN_OPERA;
+    protected static boolean RUN_EDGE;
 
     protected static String SELENIUM_HUB_URL;
 
@@ -61,9 +61,9 @@ public class HelloServiceIntegrationTest {
 
         logger.info("running the tests in Chrome: " + RUN_CHROME);
 
-        RUN_OPERA = getConfigurationProperty("RUN_OPERA", "test.run.opera", false);
+        RUN_EDGE = getConfigurationProperty("RUN_EDGE", "test.run.edge", false);
 
-        logger.info("running the tests in Opera: " + RUN_OPERA);
+        logger.info("running the tests in Edge: " + RUN_EDGE);
 
         SELENIUM_HUB_URL = getConfigurationProperty(
             "SELENIUM_HUB_URL", "test.selenium.hub.url", "http://localhost:4444/wd/hub");
@@ -185,16 +185,16 @@ public class HelloServiceIntegrationTest {
     }
 
     @Test
-    public void testOpera()
+    public void testEdge()
         throws MalformedURLException, IOException {
 
-        Assumptions.assumeTrue(RUN_OPERA);
+        Assumptions.assumeTrue(RUN_EDGE);
 
-        logger.info("executing test in opera");
+        logger.info("executing test in edge");
 
         WebDriver driver = null;
         try {
-            Capabilities browser = new OperaOptions();
+            Capabilities browser = new EdgeOptions();
             driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
             testHello(driver, TARGET_SERVER_URL);
         } finally {
