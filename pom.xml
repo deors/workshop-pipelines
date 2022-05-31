@@ -51,7 +51,10 @@
         <surefire.version>2.22.2</surefire.version>
         <failsafe.version>2.22.2</failsafe.version>
         <dependency.version>3.1.1</dependency.version>
-    </properties>
+
+        <spotify-docker.version>1.2.0</spotify-docker.version>
+        <docker.image.prefix>deors</docker.image.prefix>
+     </properties>
 
     <dependencies>
         <dependency>
@@ -155,6 +158,22 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!-- integrate Docker in lifecycle -->
+            <plugin>
+                <groupId>com.spotify</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <version>${spotify-docker.version}</version>
+                <configuration>
+                    <dockerDirectory>${project.basedir}</dockerDirectory>
+                    <imageName>${docker.image.prefix}/${project.name}</imageName>
+                    <imageTags>
+                        <imageTag>${project.version}</imageTag>
+                        <imageTag>latest</imageTag>
+                    </imageTags>
+                    <serverId>docker-hub</serverId>
+                </configuration>
             </plugin>
 
             <!-- unit tests (with mocking and code coverage agents enabled) -->
