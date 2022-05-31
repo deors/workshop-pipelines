@@ -20,6 +20,7 @@ import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.htmlunit.HtmlUnitDriver;
 import org.openqa.selenium.ie.InternetExplorerOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
+import org.openqa.selenium.safari.SafariOptions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,8 @@ public class HelloServiceIntegrationTest {
     protected static boolean RUN_CHROME;
 
     protected static boolean RUN_EDGE;
+
+    protected static boolean RUN_SAFARI;
 
     protected static String SELENIUM_HUB_URL;
 
@@ -64,6 +67,10 @@ public class HelloServiceIntegrationTest {
         RUN_EDGE = getConfigurationProperty("RUN_EDGE", "test.run.edge", false);
 
         logger.info("running the tests in Edge: " + RUN_EDGE);
+
+        RUN_SAFARI = getConfigurationProperty("RUN_SAFARI", "test.run.safari", false);
+
+        logger.info("running the tests in Safari: " + RUN_SAFARI);
 
         SELENIUM_HUB_URL = getConfigurationProperty(
             "SELENIUM_HUB_URL", "test.selenium.hub.url", "http://localhost:4444/wd/hub");
@@ -195,6 +202,26 @@ public class HelloServiceIntegrationTest {
         WebDriver driver = null;
         try {
             Capabilities browser = new EdgeOptions();
+            driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
+            testHello(driver, TARGET_SERVER_URL);
+        } finally {
+            if (driver != null) {
+                driver.quit();
+            }
+        }
+    }
+
+    @Test
+    public void testSafari()
+        throws MalformedURLException, IOException {
+
+        Assumptions.assumeTrue(RUN_SAFARI);
+
+        logger.info("executing test in safari");
+
+        WebDriver driver = null;
+        try {
+            Capabilities browser = new SafariOptions();
             driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
             testHello(driver, TARGET_SERVER_URL);
         } finally {
