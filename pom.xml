@@ -164,7 +164,7 @@
                 </executions>
             </plugin>
 
-            <!-- integrate Docker in lifecycle -->
+            <!-- integrate Docker in lifecycle (build, tag, push) -->
             <plugin>
                 <groupId>com.spotify</groupId>
                 <artifactId>docker-maven-plugin</artifactId>
@@ -205,15 +205,6 @@
                         <include>**/*IntegrationTest.java</include>
                     </includes>
                 </configuration>
-                <!-- if activated, will run failsafe automatically on integration-test and verify goals -->
-                <!--<executions>
-                    <execution>
-                        <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
-                        </goals>
-                    </execution>
-                </executions>-->
             </plugin>
 
             <!-- mutation tests (with mocking agent enabled) -->
@@ -241,14 +232,6 @@
                         <version>${pitest-junit5.version}</version>
                     </dependency>
                 </dependencies>
-                <!-- if activated, will run pitest automatically on integration-test goal -->
-                <!--<executions>
-                    <execution>
-                        <goals>
-                            <goal>mutationCoverage</goal>
-                        </goals>
-                    </execution>
-                </executions>-->
             </plugin>
 
             <!-- performance tests -->
@@ -264,33 +247,15 @@
                         <root>${jmeter.target.root}</root>
                     </propertiesUser>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>configuration</id>
-                        <goals>
-                            <goal>configure</goal>
-                        </goals>
-                    </execution>
-                <!-- if activated, jmeter will run automatically on integration-test and verify goals -->
-                    <!--<execution>
-                        <phase>integration-test</phase>
-                        <goals>
-                            <goal>configure</goal>
-                            <goal>jmeter</goal>
-                            <goal>results</goal>
-                        </goals>
-                    </execution>-->
-                </executions>
             </plugin>
 
-            <!-- dependency vulnerability tests -->
+            <!-- dependency vulnerability scan -->
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
                 <version>${dependency-check.version}</version>
                 <configuration>
                     <format>ALL</format>
-                    <!--<failBuildOnCVSS>5</failBuildOnCVSS>-->
                 </configuration>
             </plugin>
         </plugins>

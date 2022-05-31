@@ -6,7 +6,7 @@ Workshop delivered in UMA Hackers Week 6 and in Opensouthcode 2019.
 
 ## Preparing for the workshop
 
-Docker is the only pre-requisite. This workshop works with Docker native in any Linux box, with Docker for Mac, and with Docker for Windows. It has not been tested with Docker native for Windows.
+Docker is the only pre-requisite. This workshop works with Docker native in any Linux box, with Docker for Mac, and with Docker for Windows.
 
 ### Launching Jenkins and SonarQube
 
@@ -24,7 +24,7 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
         --mount type=bind,source=/usr/local/bin/docker,target=/usr/local/bin/docker \
         --env JAVA_OPTS="-Xmx2048M" \
         --env JENKINS_OPTS="--prefix=/jenkins" \
-        jenkins/jenkins:2.164.3
+        jenkins/jenkins
 
     docker run --name ci-sonarqube-data \
         --detach \
@@ -34,7 +34,7 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
         --env MYSQL_USER="sonar" \
         --env MYSQL_PASSWORD="sonarsonar" \
         --env MYSQL_ROOT_PASSWORD="adminadmin" \
-        mysql:5.6.41
+        mysql:5.7.38
 
     sleep 10
 
@@ -47,7 +47,7 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
         --env SONARQUBE_JDBC_URL="jdbc:mysql://ci-sonarqube-data:3306/sonar?useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true" \
         --env SONARQUBE_JDBC_USERNAME="sonar" \
         --env SONARQUBE_JDBC_PASSWORD="sonarsonar" \
-        sonarqube:6.7.6-community -Dsonar.web.context=/sonarqube
+        sonarqube:7.7-community -Dsonar.web.context=/sonarqube
 
 Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
 
@@ -197,9 +197,9 @@ To enable these tools along the lifecycle, and to align developer workstation us
 
 ### Upgrading JUnit to version 5
 
-Unit tests are already configured by default in Spring Boot thanks to the addition of the `spring-boot-starter-test` dependency. Unit tests are configured to run with JUnit 4, so we will upgrade the configuration to leverage JUnit 5.
+Unit tests are already configured by default in Spring Boot thanks to the addition of the `spring-boot-starter-test` dependency. Unit tests are configured to run by default with JUnit 4 but this example project is already configured to make use of JUnit 5.
 
-To enable JUnit 5, it is needed to suppress the dependency on JUnit 4, and add the newer version to `pom.xml`:
+To do this in other projects, suppress the dependency on JUnit 4 and add the newer JUnit Jupiter version to `pom.xml`:
 
 ```xml
     <dependencies>
@@ -332,7 +332,7 @@ And finally, the JaCoCo agent needs to be copied into the Docker image. Edit the
 
 ### Configuring Failsafe for integration test execution
 
-Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twin for integration tests, is disabled by default. To enable Failsafe, its targets must be called explicitely or alternatively may be binded to the corresponding lifecycle goals. For the microservices pipeline is preferred to have it disabled by default:
+Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twin for integration tests, is disabled by default. To enable Failsafe, its targets must be called explicitely or alternatively may be binded to the corresponding lifecycle goals. To better control its execution in the pipeline it is preferred to disable Failsafe by default:
 
 ```xml
     <build>
@@ -348,15 +348,6 @@ Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twi
                         <include>**/*IntegrationTest.java</include>
                     </includes>
                 </configuration>
-                <!-- if activated, will run failsafe automatically on integration-test and verify goals -->
-                <!--<executions>
-                    <execution>
-                        <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
-                        </goals>
-                    </execution>
-                </executions>-->
             </plugin>
             ...
         </plugins>
@@ -377,7 +368,6 @@ Besides the addition of the plugin, and optionally enabling the automatic execut
         ...
         <plugins>
             ...
-            <!-- performance tests -->
             <plugin>
                 <groupId>com.lazerycode.jmeter</groupId>
                 <artifactId>jmeter-maven-plugin</artifactId>
@@ -390,16 +380,6 @@ Besides the addition of the plugin, and optionally enabling the automatic execut
                         <root>${jmeter.target.root}</root>
                     </propertiesUser>
                 </configuration>
-                <!-- if activated, will run jmeter automatically on integration-test and verify goals -->
-                <!-- <executions>
-                    <execution>
-                        <phase>integration-test</phase>
-                        <goals>
-                            <goal>jmeter</goal>
-                            <goal>results</goal>
-                        </goals>
-                    </execution>
-                </executions> -->
             </plugin>
             ...
         </plugins>
@@ -413,12 +393,13 @@ The next step is to configure mutation testing with Pitest.
 
 As mutation testing works better with strict unit tests, the plugin configuration should exclude application (in-container) tests and integration tests. If left enabled, mutation testing is likely to take a very long time to finish, and results obtained are likely to not be useful at all.
 
+It is also needed to enable JUnit 5 support in Pitest explicitly by adding the corresponding dependency.
+
 ```xml
     <build>
         ...
         <plugins>
             ...
-            <!-- mutation tests -->
             <plugin>
                 <groupId>org.pitest</groupId>
                 <artifactId>pitest-maven</artifactId>
@@ -432,7 +413,6 @@ As mutation testing works better with strict unit tests, the plugin configuratio
                         <outputFormat>XML</outputFormat>
                     </outputFormats>
                 </configuration>
-                <!-- enable support for JUnit 5 in Pitest -->
                 <dependencies>
                     <dependency>
                         <groupId>org.pitest</groupId>
@@ -440,14 +420,6 @@ As mutation testing works better with strict unit tests, the plugin configuratio
                         <version>0.11</version>
                     </dependency>
                 </dependencies>
-                <!-- if activated, will run pitest automatically on integration-test goal -->
-                <!--<executions>
-                    <execution>
-                        <goals>
-                            <goal>mutationCoverage</goal>
-                        </goals>
-                    </execution>
-                </executions>-->
             </plugin>
             ...
         </plugins>
@@ -457,9 +429,11 @@ As mutation testing works better with strict unit tests, the plugin configuratio
 
 Due to how Pitest plugin works, it will fail when there are no mutable tests i.e. no strict unit tests. Considering this, the pipelines corresponding to services without mutable tests should skip the execution of Pitest.
 
-### Configuring dependency vulnerability tests with OWASP
+### Configuring dependency vulnerability scans with OWASP
 
 OWASP is a global organization focused on secure development practices. OWASP also owns several open source tools, including OWASP Dependency Check. Dependency Check scans dependencies from a project manifest, like the `pom.xml` file, and checks them with the online repository of known vulnerabilities (CVE, maintained by NIST), for every framework artefact, and version.
+
+Adding support for Dependency Check scans is as simple as adding the corresponding Maven plug-in to `pom.xml`:
 
 ```xml
     <build>
@@ -479,24 +453,6 @@ OWASP is a global organization focused on secure development practices. OWASP al
         ...
     </build>
 ```
-
-To ensure that unsecure vulnerabilities are not carried onto a live environment, the configuration may include the setting to fail builds in case of vulnerabilities detected of higher severity:
-
-```xml
-            ...
-            <plugin>
-                <groupId>org.owasp</groupId>
-                <artifactId>dependency-check-maven</artifactId>
-                <version>5.3.2</version>
-                <configuration>
-                    <format>ALL</format>
-                    <failBuildOnCVSS>5</failBuildOnCVSS>
-                </configuration>
-            </plugin>
-            ...
-```
-
-However, this approach is not recommended in favour of the finer grane configuration available inside the pipeline as explained later in this guide.
 
 ## Orchestrating the build - the continuous integration pipeline
 
@@ -533,10 +489,10 @@ pipeline {
     }
 
     environment {
-        ORG_NAME = "deors"
-        APP_NAME = "workshop-pipelines"
-        APP_CONTEXT_ROOT = "/"
-        APP_LISTENING_PORT = "8080"
+        ORG_NAME = 'deors'
+        APP_NAME = 'workshop-pipelines'
+        APP_CONTEXT_ROOT = '/'
+        APP_LISTENING_PORT = '8080'
         TEST_CONTAINER_NAME = "ci-${APP_NAME}-${BUILD_NUMBER}"
         DOCKER_HUB = credentials("${ORG_NAME}-docker-hub")
     }
@@ -570,15 +526,15 @@ The first four stages will take care of compilation, unit tests, muration tests 
     stages {
         stage('Compile') {
             steps {
-                echo "-=- compiling project -=-"
-                sh "./mvnw clean compile"
+                echo '-=- compiling project -=-'
+                sh './mvnw clean compile'
             }
         }
 
         stage('Unit tests') {
             steps {
-                echo "-=- execute unit tests -=-"
-                sh "./mvnw test"
+                echo '-=- execute unit tests -=-'
+                sh './mvnw test'
                 junit 'target/surefire-reports/*.xml'
                 jacoco execPattern: 'target/jacoco.exec'
             }
@@ -586,15 +542,15 @@ The first four stages will take care of compilation, unit tests, muration tests 
 
         stage('Mutation tests') {
             steps {
-                echo "-=- execute mutation tests -=-"
-                sh "./mvnw org.pitest:pitest-maven:mutationCoverage"
+                echo '-=- execute mutation tests -=-'
+                sh './mvnw org.pitest:pitest-maven:mutationCoverage'
             }
         }
 
         stage('Package') {
             steps {
-                echo "-=- packaging project -=-"
-                sh "./mvnw package -DskipTests"
+                echo '-=- packaging project -=-'
+                sh './mvnw package -DskipTests'
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
@@ -615,14 +571,14 @@ The next two stages will build the Docker image and provision the test environme
         ...
         stage('Build Docker image') {
             steps {
-                echo "-=- build Docker image -=-"
-                sh "./mvnw docker:build"
+                echo '-=- build Docker image -=-'
+                sh './mvnw docker:build'
             }
         }
 
         stage('Run Docker image') {
             steps {
-                echo "-=- run Docker image -=-"
+                echo '-=- run Docker image -=-'
                 sh "docker run --name ${TEST_CONTAINER_NAME} --detach --rm --network ci --expose ${APP_LISTENING_PORT} --expose 6300 --env JAVA_OPTS='-Dserver.port=${APP_LISTENING_PORT} -Dspring.profiles.active=ci -javaagent:/jacocoagent.jar=output=tcpserver,address=*,port=6300' ${ORG_NAME}/${APP_NAME}:latest"
             }
         }
@@ -653,7 +609,7 @@ The following two steps will execute the integration and performance tests, once
         ...
         stage('Integration tests') {
             steps {
-                echo "-=- execute integration tests -=-"
+                echo '-=- execute integration tests -=-'
                 sh "curl --retry 5 --retry-connrefused --connect-timeout 5 --max-time 5 http://${TEST_CONTAINER_NAME}:${APP_LISTENING_PORT}/${APP_CONTEXT_ROOT}/actuator/health"
                 sh "./mvnw failsafe:integration-test failsafe:verify -DargLine=\"-Dtest.target.server.url=http://${TEST_CONTAINER_NAME}:${APP_LISTENING_PORT}/${APP_CONTEXT_ROOT}\""
                 sh "java -jar target/dependency/jacococli.jar dump --address ${TEST_CONTAINER_NAME} --port 6300 --destfile target/jacoco-it.exec"
@@ -664,7 +620,7 @@ The following two steps will execute the integration and performance tests, once
 
         stage('Performance tests') {
             steps {
-                echo "-=- execute performance tests -=-"
+                echo '-=- execute performance tests -=-'
                 sh "./mvnw jmeter:jmeter jmeter:results -Djmeter.target.host=${TEST_CONTAINER_NAME} -Djmeter.target.port=${APP_LISTENING_PORT} -Djmeter.target.root=${APP_CONTEXT_ROOT}"
                 perfReport sourceDataFiles: 'target/jmeter/results/*.csv'
             }
@@ -688,7 +644,7 @@ For performance tests, it is possible to include a quality gate in the `perfRepo
         ...
         stage('Performance tests') {
             steps {
-                echo "-=- execute performance tests -=-"
+                echo '-=- execute performance tests -=-'
                 sh "./mvnw jmeter:jmeter jmeter:results -Djmeter.target.host=${TEST_CONTAINER_NAME} -Djmeter.target.port=${APP_LISTENING_PORT} -Djmeter.target.root=${APP_CONTEXT_ROOT}"
                 perfReport sourceDataFiles: 'target/jmeter/results/*.csv', errorUnstableThreshold: 0, errorFailedThreshold: 5, errorUnstableResponseTimeThreshold: 'default.jtl:100'
             }
@@ -696,7 +652,7 @@ For performance tests, it is possible to include a quality gate in the `perfRepo
         ...
 ```
 
-### The pipeline code 5: Dependency vulnerability tests, code inspection and quality gate
+### The pipeline code 5: Dependency vulnerability scan, code inspection and quality gate
 
 The next two stages will check dependencies for known security vulnerabilities, and execute code inspection with SonarQube (and tools enabled through plugins), including any compound quality gate defined in SonarQube for the technology or project:
 
@@ -704,19 +660,19 @@ The next two stages will check dependencies for known security vulnerabilities, 
     ...
     stages {
         ...
-        stage('Dependency vulnerability tests') {
+        stage('Dependency vulnerability scan') {
             steps {
-                echo "-=- run dependency vulnerability tests -=-"
-                sh "./mvnw dependency-check:check"
+                echo '-=- run dependency vulnerability scan -=-'
+                sh './mvnw dependency-check:check'
                 dependencyCheckPublisher
             }
         }
 
         stage('Code inspection & quality gate') {
             steps {
-                echo "-=- run code inspection & check quality gate -=-"
+                echo '-=- run code inspection & check quality gate -=-'
                 withSonarQubeEnv('ci-sonarqube') {
-                    sh "./mvnw sonar:sonar"
+                    sh './mvnw sonar:sonar'
                 }
                 timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
@@ -728,15 +684,15 @@ The next two stages will check dependencies for known security vulnerabilities, 
     ...
 ```
 
-For dependency check, it is possible to include a quality gate in the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable. As an example, this is a quality gate flagging the build as unstable if there are at least one high severity or at least one medium severity issues, and failing the build if there are more than 2 high severity or more than 5 medium severity issues.
+For dependency check, it is possible to include a quality gate in the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable. As an example, this is a quality gate flagging the build as unstable if there are at least one high severity or at least one medium severity issues, and failing the build if there are at least 1 critical severity issue, or more than 2 high or more than 5 medium severity issues.
 
 ```groovy
         ...
-        stage('Dependency vulnerability tests') {
+        stage('Dependency vulnerability scan') {
             steps {
-                echo "-=- run dependency vulnerability tests -=-"
-                sh "./mvnw dependency-check:check"
-                dependencyCheckPublisher failedTotalHigh: '2', unstableTotalHigh: '0', failedTotalMedium: '5', unstableTotalMedium: '0'
+                echo '-=- run dependency vulnerability scan -=-'
+                sh './mvnw dependency-check:check'
+                dependencyCheckPublisher failedTotalCritical: '0', unstableTotalCritical: '0', failedTotalHigh: '2', unstableTotalHigh: '0', failedTotalMedium: '5', unstableTotalMedium: '0'
             }
         }
         ...
@@ -744,7 +700,7 @@ For dependency check, it is possible to include a quality gate in the `dependenc
 
 It's worth noting that the code analysis and calculation of the quality gate by SonarQube is an asynchronous process. Depending on SonarQube server load, it might take some time for results to be available, and as a design decision, the `sonar:sonar` goal will not wait, blocking the build, until then. This has the beneficial side effect that the Jenkins executor is not blocked and other builds might be built in the meantime, maximizing the utilization of Jenkins build farm resources.
 
-The default behavior for SonarQube quality gate, as coded in the `waitForQualityGate` function, is to break the build in case or warning or error. However, it is better to fail the build only when the quality gate is in error status. To code that behavior in the pipeline, there is a custom `script` step implementing that logic.
+The default behavior for SonarQube quality gate, as coded in the `waitForQualityGate` function, is to break the build in case any of the thresholds defined in the gate is not achieved.
 
 ### The pipeline code 6: Pushing the Docker image
 
@@ -756,8 +712,8 @@ At this point of the pipeline, if all quality gates have passed, the produced im
         ...
         stage('Push Docker image') {
             steps {
-                echo "-=- push Docker image -=-"
-                sh "./mvnw docker:push"
+                echo '-=- push Docker image -=-'
+                sh './mvnw docker:push'
             }
         }
     }
@@ -814,7 +770,7 @@ pipeline {
     ...
     post {
         always {
-            echo "-=- remove deployment -=-"
+            echo '-=- remove deployment -=-'
             sh "docker stop ${TEST_CONTAINER_NAME}"
         }
     }
