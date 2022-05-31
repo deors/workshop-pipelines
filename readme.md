@@ -195,45 +195,9 @@ To enable these tools along the lifecycle, and to align developer workstation us
 
 ## Explaining stuff in Maven's pom.xml
 
-### Upgrading JUnit to version 5
-
-Unit tests are already configured by default in Spring Boot thanks to the addition of the `spring-boot-starter-test` dependency. Unit tests are configured to run by default with JUnit 4 but this example project is already configured to make use of JUnit 5.
-
-To do this in other projects, suppress the dependency on JUnit 4 and add the newer JUnit Jupiter version to `pom.xml`:
-
-```xml
-    <dependencies>
-        ...
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>junit</groupId>
-                    <artifactId>junit</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>5.6.2</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.6.2</version>
-            <scope>test</scope>
-        </dependency>
-        ...
-    </dependencies>
-```
-
 ### Adding JaCoCo agent to gather code coverage metrics during tests
 
-One of the actions to be done along the pipeline, is to enable code coverage metrics when unit tests and integration tests are executed. To do that, there are a few actions needed in preparation for the task.
+One of the actions to be done along the pipeline, is to gather code coverage metrics when unit tests and integration tests are executed. To do that, there are a few actions needed in preparation for the task.
 
 First, the JaCoCo agent must be added as a Maven dependency in `pom.xml`:
 
