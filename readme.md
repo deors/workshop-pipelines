@@ -29,12 +29,10 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
     docker run --name ci-sonarqube-data \
         --detach \
         --network ci \
-        --mount type=volume,source=postgresql,target=/var/lib/postgresql \
+        --mount type=volume,source=ci-postgresql-home,target=/var/lib/postgresql \
         --mount type=volume,source=ci-sonarqube-data,target=/var/lib/postgresql/data \
-        --env POSTGRES_DATABASE="sonar" \
         --env POSTGRES_USER="sonar" \
         --env POSTGRES_PASSWORD="sonarsonar" \
-        --env POSTGRES_ROOT_PASSWORD="adminadmin" \
         postgres:13.7
 
     sleep 10
@@ -52,7 +50,7 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
 
 Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
 
-Depending on the underlying OS, Docker daemon might be in a different folder. In those cases, use path `/usr/bin/docker`.
+Depending on the underlying OS, Docker daemon might be in a different folder. In those cases, use the right path e.g. `/usr/bin/docker` (the `where` command might be of help).
 
 ### Jenkins configuration
 
