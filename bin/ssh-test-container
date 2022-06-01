@@ -1,2 +1,2 @@
 #!/bin/bash
-docker exec -it ci-workshop-pipelines /bin/bash
+docker exec -it test-workshop-pipelines /bin/bash

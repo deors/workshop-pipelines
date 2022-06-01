@@ -1,2 +1,2 @@
 #!/bin/bash
-./mvnw jmeter:jmeter jmeter:results -Djmeter.target.host=localhost -Djmeter.target.port=8888 -Djmeter.target.root=/
+./mvnw jmeter:configure@configuration jmeter:jmeter jmeter:results -Djmeter.target.host=localhost -Djmeter.target.port=8080 -Djmeter.target.root=/

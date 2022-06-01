@@ -1,5 +1,5 @@
 #!/bin/bash
-docker run --name ci-workshop-pipelines \
+docker run --name test-workshop-pipelines \
   --detach --rm \
   --network ci \
   --publish 8080:8080 --publish 6300:6300 \

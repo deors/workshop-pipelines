@@ -1,2 +1,2 @@
 #!/bin/bash
-docker stop ci-workshop-pipelines
+docker stop test-workshop-pipelines
