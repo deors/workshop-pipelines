@@ -198,7 +198,7 @@
                         <value>${jmockit.agentConfig}</value>
                     </jvmArgs>
                     <excludedTestClasses>
-                        <param>*ApplicationTests</param>
+                        <param>*ApplicationTest</param>
                         <param>*IntegrationTest</param>
                     </excludedTestClasses>
                     <outputFormats>
