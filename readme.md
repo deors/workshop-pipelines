@@ -24,17 +24,18 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
         --mount type=bind,source=/usr/local/bin/docker,target=/usr/local/bin/docker \
         --env JAVA_OPTS="-Xmx2048M" \
         --env JENKINS_OPTS="--prefix=/jenkins" \
-        jenkins/jenkins
+        jenkins/jenkins:2.350
 
     docker run --name ci-sonarqube-data \
         --detach \
         --network ci \
-        --mount type=volume,source=ci-sonarqube-data,target=/var/lib/mysql \
-        --env MYSQL_DATABASE="sonar" \
-        --env MYSQL_USER="sonar" \
-        --env MYSQL_PASSWORD="sonarsonar" \
-        --env MYSQL_ROOT_PASSWORD="adminadmin" \
-        mysql:5.7.38
+        --mount type=volume,source=postgresql,target=/var/lib/postgresql \
+        --mount type=volume,source=ci-sonarqube-data,target=/var/lib/postgresql/data \
+        --env POSTGRES_DATABASE="sonar" \
+        --env POSTGRES_USER="sonar" \
+        --env POSTGRES_PASSWORD="sonarsonar" \
+        --env POSTGRES_ROOT_PASSWORD="adminadmin" \
+        postgres:13.7
 
     sleep 10
 
@@ -44,10 +45,10 @@ Both Jenkins and SonarQube servers are required for running the pipelines and co
         --publish 9000:9000 \
         --mount type=volume,source=ci-sonarqube-extensions,target=/opt/sonarqube/extensions \
         --mount type=volume,source=ci-sonarqube-esdata,target=/opt/sonarqube/data \
-        --env SONARQUBE_JDBC_URL="jdbc:mysql://ci-sonarqube-data:3306/sonar?useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true" \
+        --env SONARQUBE_JDBC_URL="jdbc:postgresql://ci-sonarqube-data:5432/sonar?charSet=UNICODE" \
         --env SONARQUBE_JDBC_USERNAME="sonar" \
         --env SONARQUBE_JDBC_PASSWORD="sonarsonar" \
-        sonarqube:7.7-community -Dsonar.web.context=/sonarqube
+        sonarqube:9.4-community -Dsonar.web.context=/sonarqube
 
 Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
 
