@@ -11,30 +11,52 @@
     <packaging>jar</packaging>
 
     <name>workshop-pipelines</name>
-    <description>Materials for Hackers Week 6 workshop on Jenkins pipelines with Docker.
-                 An exemplar Java + Maven + Spring Boot project with Jenkins pipeline using
-                 Maven lifecycle and Docker for packaging and running integration tests</description>
+    <description>Java + Maven + Spring Boot application to be used as an example
+                 for the workshop on Jenkins CI/CD pipelines.</description>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.0</version>
+        <version>2.7.12</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <java.version>17</java.version>
+        <java.version>20</java.version>
 
         <junit.version>5.8.2</junit.version> <!-- provided by spring-boot-starter-test pom -->
-        <selenium.version>4.2.0</selenium.version>
-        <selenium-htmlunit.version>3.61.0</selenium-htmlunit.version>
+        <jmockit.version>1.49</jmockit.version>
+        <jacoco.version>0.8.10</jacoco.version>
+        <selenium.version>4.10.0</selenium.version>
+        <selenium-htmlunit.version>4.10.0</selenium-htmlunit.version>
+        <pitest.version>1.14.1</pitest.version>
+        <pitest-junit5.version>1.2.0</pitest-junit5.version>
+        <jmeter-plugin.version>3.5.0</jmeter-plugin.version>
+        <jmeter.version>5.4.3</jmeter.version>
+        <dependency-check.version>8.3.1</dependency-check.version>
 
+        <jmockit.path>${settings.localRepository}/org/jmockit/jmockit/${jmockit.version}/jmockit-${jmockit.version}.jar</jmockit.path>
+        <jmockit.agentConfig>-javaagent:${jmockit.path}</jmockit.agentConfig>
+
+        <jacoco.path>${settings.localRepository}/org/jacoco/org.jacoco.agent/${jacoco.version}/org.jacoco.agent-${jacoco.version}-runtime.jar</jacoco.path>
+        <jacoco.utReport>${project.build.directory}/jacoco.exec</jacoco.utReport>
+        <jacoco.itReport>${project.build.directory}/jacoco-it.exec</jacoco.itReport>
+        <jacoco.utAgentConfig>-javaagent:${jacoco.path}=destfile=${jacoco.utReport}</jacoco.utAgentConfig>
+        <jacoco.itAgentConfig>-javaagent:${jacoco.path}=destfile=${jacoco.itReport}</jacoco.itAgentConfig>
+
+        <!-- test properties -->
+        <jmeter.target.host>localhost</jmeter.target.host>
+        <jmeter.target.port>8080</jmeter.target.port>
+        <jmeter.target.root>/</jmeter.target.root>
+
+        <!-- maven standard plugins-->
         <compiler.version>3.8.1</compiler.version>
         <surefire.version>2.22.2</surefire.version>
         <failsafe.version>2.22.2</failsafe.version>
-     </properties>
+        <dependency.version>3.1.1</dependency.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -52,6 +74,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.jmockit</groupId>
+            <artifactId>jmockit</artifactId>
+            <version>${jmockit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.seleniumhq.selenium</groupId>
             <artifactId>selenium-java</artifactId>
             <version>${selenium.version}</version>
@@ -61,6 +89,13 @@
             <groupId>org.seleniumhq.selenium</groupId>
             <artifactId>htmlunit-driver</artifactId>
             <version>${selenium-htmlunit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jacoco</groupId>
+            <artifactId>org.jacoco.agent</artifactId>
+            <version>${jacoco.version}</version>
+            <classifier>runtime</classifier>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -74,12 +109,47 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- unit tests (with mocking agent enabled) -->
+            <!-- copy JaCoCo dependencies to include them in the Docker image
+                 and to collect code coverage metrics during integration tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${dependency.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.jacoco</groupId>
+                                    <artifactId>org.jacoco.agent</artifactId>
+                                    <version>${jacoco.version}</version>
+                                    <classifier>runtime</classifier>
+                                    <destFileName>jacocoagent.jar</destFileName>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.jacoco</groupId>
+                                    <artifactId>org.jacoco.cli</artifactId>
+                                    <version>${jacoco.version}</version>
+                                    <classifier>nodeps</classifier>
+                                    <destFileName>jacococli.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- unit tests (with mocking and code coverage agents enabled) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${surefire.version}</version>
                 <configuration>
+                    <argLine>${jmockit.agentConfig} ${jacoco.utAgentConfig}</argLine>
                     <excludes>
                         <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
@@ -92,9 +162,91 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>${failsafe.version}</version>
                 <configuration>
+                    <!-- JaCoCo must be enabled on target app container to gather coverage
+                         for integration tests, e.g. UI tests and API tests -->
                     <includes>
                         <include>**/*IntegrationTest.java</include>
                     </includes>
+                </configuration>
+                <!-- if activated, failsafe will run automatically on integration-test and verify goals -->
+                <!--<executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>-->
+            </plugin>
+
+            <!-- mutation tests (with mocking agent enabled) -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>${pitest.version}</version>
+                <configuration>
+                    <jvmArgs>
+                        <value>${jmockit.agentConfig}</value>
+                    </jvmArgs>
+                    <excludedTestClasses>
+                        <param>*ApplicationTest</param>
+                        <param>*IntegrationTest</param>
+                    </excludedTestClasses>
+                    <outputFormats>
+                        <outputFormat>XML</outputFormat>
+                    </outputFormats>
+                </configuration>
+                <!-- enable support for JUnit 5 in Pitest -->
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>${pitest-junit5.version}</version>
+                    </dependency>
+                </dependencies>
+                <!-- if activated, pitest will run automatically on integration-test goal -->
+                <!--<executions>
+                    <execution>
+                        <goals>
+                            <goal>mutationCoverage</goal>
+                        </goals>
+                    </execution>
+                </executions>-->
+            </plugin>
+
+            <!-- performance tests -->
+            <plugin>
+                <groupId>com.lazerycode.jmeter</groupId>
+                <artifactId>jmeter-maven-plugin</artifactId>
+                <version>${jmeter-plugin.version}</version>
+                <configuration>
+                    <testResultsTimestamp>false</testResultsTimestamp>
+                    <propertiesUser>
+                        <host>${jmeter.target.host}</host>
+                        <port>${jmeter.target.port}</port>
+                        <root>${jmeter.target.root}</root>
+                    </propertiesUser>
+                </configuration>
+                <!-- if activated, jmeter will run automatically on integration-test and verify goals -->
+                <!--<executions>
+                    <execution>
+                        <phase>integration-test</phase>
+                        <goals>
+                            <goal>configure</goal>
+                            <goal>jmeter</goal>
+                            <goal>results</goal>
+                        </goals>
+                    </execution>
+                </executions>-->
+            </plugin>
+
+            <!-- dependency vulnerability scan -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${dependency-check.version}</version>
+                <configuration>
+                    <format>ALL</format>
                 </configuration>
             </plugin>
         </plugins>

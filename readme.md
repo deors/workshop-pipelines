@@ -1,8 +1,9 @@
 # workshop-pipelines
 
-Workshop about CI/CD pipelines with Jenkins and Docker.
+Workshop on Jenkins CI/CD pipelines.
 
-Workshop delivered in UMA Hackers Week 6 and in Opensouthcode 2019.
+Workshop delivered in UMA Hackers Week 6 and in OpenSouthCode 2019 leveraging Docker as the container runtime.
+Major workshop refresh delivered first in OpenSlava 2023 leveraging Kubernetes via Rancher Desktop and K3s.
 
 ## Preparing for the workshop
 

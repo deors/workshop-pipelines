@@ -123,7 +123,7 @@ public class HelloServiceIntegrationTest {
 
         try {
             driver = new HtmlUnitDriver(true);
-            testHello(driver, TARGET_SERVER_URL);
+            testAll(driver, TARGET_SERVER_URL);
         } finally {
             if (driver != null) {
                 driver.quit();
@@ -143,7 +143,7 @@ public class HelloServiceIntegrationTest {
         try {
             Capabilities browser = new InternetExplorerOptions();
             driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
-            testHello(driver, TARGET_SERVER_URL);
+            testAll(driver, TARGET_SERVER_URL);
         } finally {
             if (driver != null) {
                 driver.quit();
@@ -163,7 +163,7 @@ public class HelloServiceIntegrationTest {
         try {
             Capabilities browser = new FirefoxOptions();
             driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
-            testHello(driver, TARGET_SERVER_URL);
+            testAll(driver, TARGET_SERVER_URL);
         } finally {
             if (driver != null) {
                 driver.quit();
@@ -183,7 +183,7 @@ public class HelloServiceIntegrationTest {
         try {
             Capabilities browser = new ChromeOptions();
             driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
-            testHello(driver, TARGET_SERVER_URL);
+            testAll(driver, TARGET_SERVER_URL);
         } finally {
             if (driver != null) {
                 driver.quit();
@@ -203,7 +203,7 @@ public class HelloServiceIntegrationTest {
         try {
             Capabilities browser = new EdgeOptions();
             driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
-            testHello(driver, TARGET_SERVER_URL);
+            testAll(driver, TARGET_SERVER_URL);
         } finally {
             if (driver != null) {
                 driver.quit();
@@ -223,7 +223,7 @@ public class HelloServiceIntegrationTest {
         try {
             Capabilities browser = new SafariOptions();
             driver = new RemoteWebDriver(new URL(SELENIUM_HUB_URL), browser);
-            testHello(driver, TARGET_SERVER_URL);
+            testAll(driver, TARGET_SERVER_URL);
         } finally {
             if (driver != null) {
                 driver.quit();
@@ -231,7 +231,12 @@ public class HelloServiceIntegrationTest {
         }
     }
 
-    private void testHello(WebDriver driver, String baseUrl) {
+    private void testAll(WebDriver driver, String baseUrl) {
+        testHelloGreeting(driver, baseUrl);
+        testHelloWithNameGreeting(driver, baseUrl);
+    }
+
+    private void testHelloGreeting(WebDriver driver, String baseUrl) {
 
         WebElement body = (new WebDriverWait(driver, Duration.ofSeconds(10))).until(
             d -> {
@@ -240,5 +245,16 @@ public class HelloServiceIntegrationTest {
             });
 
         assertEquals("Hello!", body.getText(), "HelloGreeting service should respond with 'Hello!' greeting");
+    }
+
+    private void testHelloWithNameGreeting(WebDriver driver, String baseUrl) {
+
+        WebElement body = (new WebDriverWait(driver, Duration.ofSeconds(10))).until(
+            d -> {
+                d.get(baseUrl + "hello/James");
+                return d.findElement(By.xpath("/html/body"));
+            });
+
+        assertEquals("Hello!, James", body.getText(), "HelloGreeting service should respond with 'Hello!' greeting");
     }
 }
