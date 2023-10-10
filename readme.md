@@ -10,7 +10,7 @@ Major workshop refresh delivered first in OpenSlava 2023 leveraging Kubernetes v
 
 Rancher Desktop is the only pre-requisite. This workshop has been tested to work with Rancher Desktop 1.10 on macOS Ventura 13.6. It should work on any other Rancher Desktop environment, K3s, or even vanilla Kubernetes.
 
-If using a managed Kubernetes cluster, it is likely that there some important services, such as authentication or networking, coupled to the specific platform. In that case, check for other branches in this repository that might be available to support those specific managed Kubernetes flavor.
+If using a managed Kubernetes cluster, it is likely that there some important services, such as authentication or networking, coupled to the specific platform. If that is your case, you may continue to leverage large portions of the workshop, but the necessary adaptations will not be covered here.
 
 ### 1.1. Configure K3s
 
