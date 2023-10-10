@@ -3,120 +3,175 @@
 Workshop on Jenkins CI/CD pipelines.
 
 Workshop delivered in UMA Hackers Week 6 and in OpenSouthCode 2019 leveraging Docker as the container runtime.
+
 Major workshop refresh delivered first in OpenSlava 2023 leveraging Kubernetes via Rancher Desktop and K3s.
 
-## Preparing for the workshop
+## Part 1. Preparing for the workshop
 
-Docker is the only pre-requisite. This workshop works with Docker native in any Linux box, with Docker for Mac, and with Docker for Windows.
+Rancher Desktop is the only pre-requisite. This workshop has been tested to work with Rancher Desktop 1.10 on macOS Ventura 13.6. It should work on any other Rancher Desktop environment, K3s, or even vanilla Kubernetes.
 
-### Launching Jenkins and SonarQube
+If using a managed Kubernetes cluster, it is likely that there some important services, such as authentication or networking, coupled to the specific platform. In that case, check for other branches in this repository that might be available to support those specific managed Kubernetes flavor.
 
-Both Jenkins and SonarQube servers are required for running the pipelines and code inspection. Although there are many ways to have Jenkins and SonarQube up and running, this is probably the easiest, fastest one -- running them as Docker containers:
+### 1.1. Configure K3s
 
-    docker network create ci
+Rancher Desktop comes with K3s, a lightweight Kubernetes distribution optimized to be used in a workstation and other resource-limited environments.
+Although normally K3s will work just fine out of the box, there are a few tweaks that we need to perform before starting with the workshop itself.
 
-    docker run --name ci-jenkins \
-        --user root \
-        --detach \
-        --network ci \
-        --publish 9080:8080 --publish 50000:50000 \
-        --mount type=volume,source=ci-jenkins-home,target=/var/jenkins_home \
-        --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
-        --mount type=bind,source=/usr/local/bin/docker,target=/usr/local/bin/docker \
-        --env JAVA_OPTS="-Xmx2048M" \
-        --env JENKINS_OPTS="--prefix=/jenkins" \
-        jenkins/jenkins:2.350
+First, let's create a local folder in your workstation that will be used to create persistent volumes for Jenkins and other tools. In that way, the data will survive crashes or cluster restarts. I recommend to create the folder on your home holder:
 
-    docker run --name ci-sonarqube-data \
-        --detach \
-        --network ci \
-        --mount type=volume,source=ci-postgresql-home,target=/var/lib/postgresql \
-        --mount type=volume,source=ci-sonarqube-data,target=/var/lib/postgresql/data \
-        --env POSTGRES_USER="sonar" \
-        --env POSTGRES_PASSWORD="sonarsonar" \
-        postgres:13.7
+    mkdir ~/data
 
-    sleep 10
+Next, we must override Lima settings to increase the max virtual memory areas value and to mount the folder created above. To override those settings, simply create a file in Lima config folder `~/Library/Application Support/rancher-desktop/lima/_config/override.yaml` and include the following content:
 
-    docker run --name ci-sonarqube \
-        --detach \
-        --network ci \
-        --publish 9000:9000 \
-        --mount type=volume,source=ci-sonarqube-extensions,target=/opt/sonarqube/extensions \
-        --mount type=volume,source=ci-sonarqube-esdata,target=/opt/sonarqube/data \
-        --env SONARQUBE_JDBC_URL="jdbc:postgresql://ci-sonarqube-data:5432/sonar?charSet=UNICODE" \
-        --env SONARQUBE_JDBC_USERNAME="sonar" \
-        --env SONARQUBE_JDBC_PASSWORD="sonarsonar" \
-        sonarqube:9.4-community -Dsonar.web.context=/sonarqube
+    provision:
+    - mode: system
+    script: |
+        #!/bin/sh
+        sysctl -w vm.max_map_count=262144
+    mounts:
+    - location: /Users/<<username>>/data
+    mountPoint: /data
+    writable: true
 
-Note that the preceding commands will set up persistent volumes so all configuration, plugins and data persists across server restarts.
+Alternatively, use the `src/etc/k3s-lima-override.yaml` file available in the repository. After the file is created, reset K3s for the changes to be applied.
 
-Depending on the underlying OS, Docker daemon might be in a different folder. In those cases, use the right path e.g. `/usr/bin/docker` (the `where` command might be of help).
+To validate whether the changes are effectively applied, let's "jump" into the Lima VM by running this command:
 
-### Jenkins configuration
+    rdctl shell
 
-On first run, Jenkins will show a wizard to configure the instance. This configuration needs to be done only on first run.
+And once inside, check for the expected changes:
 
-The first step is to confirm the initial administrator password which is kept safe in the `ci-jenkins-home` volume. Simply navigate to the right folder inside the volume, and take note of the initial password.
+    sysctl vm.max_map_count # should return 262144
+    ls /data # should confirm that the directory is mounted
 
-Next step is to install an initial selection of plugins. Starting with the suggested plugins is generally a good idea.
+The third step is to prepare the Kubeconfig file. When Rancher Desktop is installed, the cluster configuration is stored in `~/.kube/config`. If, for some reason, you have lost the file, it can be retrieved from the Lima VM by running this command:
 
-To complete the wizard, create the first administrator user. Take note of the user and password as it will be required to login into Jenkins from now on.
+    rdctl shell sudo cat /etc/rancher/k3s/k3s.yaml
 
-Once the wizard finishes the initial configuration, there are few other plugins that will be used in the workshop. To install them, click on `Manage Jenkins` menu option and next click on `Manage Plugins` menu option. In the Available tab, search for the required plugins, click the selection checkbox and then, at the bottom of the page, select the action `Install without restart`. The plugins needed are:
+That configuration file is not ready yet for our needs. If you check the settings, the server IP address is set to `127.0.0.1` and when later we use those settings to connect with the cluster API, it would not work. Therefore, the configuration must be updated to use the cluster IP address. To get that IP run this command:
 
-- `Docker Pipeline`
+    kubectl get services
+
+The only service available at this point should be precisely the Kubernetes service, so take note of that IP and use it to fix the Kubeconfig file. Save that file in a safe place as it will be needed in a few minutes to configure Jenkins integration with the cluster.
+
+### 1.2. Run Jenkins
+
+To run Jenkins, let's use the official image, adding a persistent volume and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
+
+    kubectl apply -f src/etc/ci-jenkins.yaml
+
+To verify that the whole deployment was right, use the following command:
+
+    kubectl get all,ingress,pv,pvc
+
+You should see that a pod, service, deployment, replica set, ingress, persistent volume, and persistent volume claim object are created in the cluster.
+
+Take note of the IP address for the Jenkins master service as it will be needed later to configure the integration between Jenkins and the cluster. In my own tests, there are situations in which K3s networking does not work as intended (e.g., moving the workstation from home wifi to office wifi). As a workaround, it is possible to use the Jenkins master pod IP instead of the service IP. To easily get the pod IP you may run this command (use the pod id listed by previous `kubectl get` command):
+
+    kubectl describe pod/ci-jenkins-<<rest-of-pod-id>> | grep IP:
+
+### 1.3. Configure Jenkins
+
+Thanks to Traefik, we can access the Jenkins UI through `http://localhost/jenkins`. Alternatively, it is also possible to configure port forwarding in Rancher Desktop.
+
+On first run, Jenkins will show a wizard to configure the instance. This configuration needs to be done only on first run (unless the persistent volume is not configured properly as explained above).
+
+The first step is to confirm the initial administrator password which is kept safe in the `jenkins-home` volume. You may get that password with any of these commands (remember that we mapped the volume to a folder in our workstation):
+
+    cat ~/data/ci-jenkins-home/secrets/initialAdminPassword
+    rdctl shell cat /data/ci-jenkins-home/secrets/initialAdminPassword
+
+Next step is to install the initial set of plugins. Starting with the suggested plugins is generally a good idea.
+
+To complete the wizard, create the first administrator user. Take note of the user and password as it will be required to login into Jenkins from now on. I strongly recommend to not use typical passwords as `admin`, `adminadmin`, or `12345` as some King Roland would do.
+
+Once the Jenkins setup wizard finishes the initial configuration, there are few other plugins that will be used in the pipeline. To install them, click on the `Manage Jenkins` left menu option and next click on the `Plugins` center menu option (under `System Configuration` section). Click on the `Available plugins` left menu option, search iteratively for each one of the plugins, click the selection checkbox and then when ready push the `Install` button. The required plugins are:
+
+- `Kubernetes`
 - `Pipeline Utility Steps`
 - `JaCoCo`
 - `OWASP Dependency-Check`
 - `Performance`
 - `SonarQube Scanner`
 
-### SonarQube configuration
+### 1.4. Configure Jenkins integration with Kubernetes
 
-To integrate SonarQube with Jenkins, the Jenkins plugin must be configured to reach out to the right SonarQube instance when required.
+Once the plug-ins are ready, let's configure the Kubernetes cloud to launch our builds. Click on the `Manage Jenkins` left menu option and next click on the `Clouds` center menu option (under `System Configuration` section). Click the `New cloud` center menu option, use a reasonable name (e.g., `k3s-lima-vm`), select that the cloud is of `Kubernetes` type, and click the `Create` button.
 
-Before configuring that integration, a SonarQube API token must be created. That token is required to authenticate requests coming from Jenkins.
+Expand the `Kubernetes Cloud details` section and pay special attention to these settings are they are very sensitive to your specific networking configuration.
 
-Login to SonarQube using the default credentials: both username and password are simply `admin`. On first run, a tutorial wizard will show but it can be skipped for now.
+The Kubernetes URL must be set so it is accessible from the Jenkins pod (remember, this is why `127.0.0.1` was not an option). The cluster IP address noted before should be a good and predictable way to get the Jenkins master and the cluster API integrated from within the cluster internal network. The local workstation IP may also be an option but I've found out in my own experiments that is not reliable.
 
-Click on `Administration` on the top menu and afterwards on `Security` and `Users` in the horizonal menu below. In the `Administrator` user configuration row, there is a menu icon to the right with the label `Update Tokens`. Click on it, and in the pop-up dialog, in the text box below `Generate Tokens` enter `ci-sonarqube` (or any other meaningful name) and press the `Generate` button. The API token will be shown below. Take note of it, as this is the last time it will be shown in the UI.
+The Jenkins URL must be set so any pod scheduled to run a build is able to connect with the Jenkins master. Use the Jenkins master service/pod IP address noted before to configure this. If you have deployed Jenkins with the provided YAML file, the Jenkins master should be listening in `9090` port.
 
-Before leaving SonarQube, let's configure the webhook that will be leveraged by SonarQube to let Jenkins know that a requested analysis has finished.
+The credential needed is the Kubeconfig file prepared a few steps before. Click the `Add` button, select `Jenkins` as the credentials provider, select `Secret file` as the kind of credential, and upload the Kubeconfig from the folder where it was stored before. Choose a representative id for the credential (e.g., `k3s-lima-vm-kubeconfig`) and click the `Add` button when finished. This credential is going to be needed in the pipeline, so take note of the id for later.
 
-Click on `Administration` on the top menu and afterwards on `Configuration`and `Webhooks` in the horizontal menu below. Click the `Create` button. Enter `ci-jenkins` for the webhook name, and for the URL, the Jenkins home URL appending `/sonarqube-webhook`. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9080/jenkins/sonarqube-webhook`. Click the `Create` button and configuration on the SonarQube side is ready.
+Use the `Test Connection` button to check that all settings are ok. Click the `Save` button to finish the configuration.
 
-Login to Jenkins with the previously configured administrator credentials.
+### 1.5. Configure credentials for Docker Hub
 
-Click on `Manage Jenkins` menu option and next click on `Manage Credentials` menu option. In the credentials store table, click on the link labeled as `(global)` for the Jenkins global domain.
+At a later point during the pipeline execution, generated and validated Docker images are going to be published into Docker Hub. For that to be possible, the Docker Hub credential must be configured. We will use the Jenkins credentials manager for that.
 
-Next, click on `Add Credentials` in the left menu. In the credential kind select `Secret text`. The secret value is the API token just generated. The secret id can be `ci-sonarqube` as well. Press `Create` when finished to save the credentials in the store.
+Click on the `Manage Jenkins` left menu option, next click on the `Credentials` center menu option, and then click on the link labeled as `(global)` for the Jenkins global domain. This is the same domain where the Kubeconfig file was stored before.
 
-Next, let's configure the SonarQube server integration. Go back to the dashboard, click on `Manage Jenkins` menu option and next click on `Configure System` menu option. Scroll down until the section `SonarQube Servers` is visible. Click the checkbox to allow injection of server configuration.
+Next, click on the `Add Credentials` button and enter the credentials needed to access Docker Hub (kind `Username with password`).
 
-Next, let's add the SonarQube instance name and URL. To ensure that the right server is used by the pipeline use `ci-sonarqube` for the instance name. If the selected name is different, it should match the name referenced in the pipeline later. For the server URL, use the SonarQube home URL. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9000/sonarqube`. Finally, for the server authentication token, use the API token stored in the `ci-sonarqube` credential created before. Click the `Save` button and configuration on the Jenkins side is ready.
+In the `ID` field, enter the credential id as it is going to be referenced from the pipeline, e.g. use `docker-hub-<<myorgname>>` where `<<myorgname>>` is the organization name in Docker Hub. Press `Create` when finished to save the credentials in the store.
 
-### Configuring credentials for Docker Hub
+### 1.6. Create and run a test job
 
-At a later point during the pipeline execution, validated Docker images are going to be published into Docker Hub. For that to be possible, Docker Hub credential must be configured before using Jenkins credentials manager.
+Although in the previous step the connection between Jenkins and K3s was tested, it does not mean that a job will run. In particular, the Jenkins URL that was configured is key as it is used from the pod to attach the Jenkins agent to the master. That setting is not verified when the connection was tested, so let's create a very simple test job to verify the whole integration.
 
-Click on `Manage Jenkins` menu option and next click on `Manage Credentials` menu option, and then click on the link labeled as `(global)` for the Jenkins global domain. This is the same domain where the SonarQube API token was configured before.
+From Jenkins home click the `Create a job` center menu option. As the job name use a representative name (e.g., `test-k3s-integration`), and for the type select `Pipeline` and click the `OK` button at the bottom.
 
-Next, click on `Add Credentials` in the left menu and enter the credentials needed to access Docker Hub.
+Scroll down a bit, and in the `Pipeline` section, ensure that the definition is of kind `Pipeline script` and use the following code to define the pipeline. Do not pay too much attention now to its syntax, as I will explain in a bit the anatomy of a pipeline:
 
-In the `ID` field, enter the credential id as it is going to be referenced from the pipeline, e.g. use `myorgname-docker-hub` where `myorgname` is the organization name in Docker Hub. Press `Create` when finished to save the credentials in the store.
+```groovy
+pipeline {
+    agent {
+        kubernetes {
+            defaultContainer 'jdk'
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+containers:
+    - name: jdk
+    image: docker.io/eclipse-temurin:20.0.1_9-jdk
+    command:
+        - cat
+    tty: true
+'''
+        }
+    }
 
-## The anatomy of a Jenkins pipeline
+    stages {
+        stage('Check environment') {
+            steps {
+                sh 'java -version'
+            }
+        }
+    }
+}
+```
 
-A Jenkins pipeline, written in the form of a declarative pipeline with a rich DSL and semantics, the *Jenkinsfile*, is a model for any process, understood as a succession of stages and steps, sequential, parallel or any combination of both. In this context, the process is a build process, following the principles of continuous integration, continuous code inspection and continuous testing (continuous integration pipeline, for short).
+Click the `Save` button at the bottom of the page, and on the job page select the `Build Now` left menu option.
 
-Jenkins pipelines are written in Groovy, and the pipeline DSL is designed to be pluggable, so any given plugin may contribute with its own idioms to the pipeline DSL, as well as extended through custom functions bundled in Jenkins libraries.
+If everything is well configured, the job console will show how the pod is scheduled, the Jenkins agent registers with the master, and the simple `java -version` command is executed demonstrating that the JDK image was downloaded and it was possible to run the tool inside the container.
 
-The combination of a powerful dynamic language as Groovy, with the rich semantics of the available DSLs, allows developers to write simple, expressive pipelines, while having all freedom to customize the pipeline behavior up to the smallest detail.
+## Part 2. The anatomy of a Jenkins pipeline
+
+A Jenkins pipeline, written in the form of a declarative pipeline with a rich DSL and semantics, the *Jenkinsfile*, is a model for any process, understood as a succession of stages and steps, sequential, parallel or any combination of both. In this context, the process is a CI/CD process, providing automation for common and repetitive tasks such as building, packaging, validating, publishing or deploying a build.
+
+### 2.1. Pipelines as code
+
+Jenkins pipelines are written in Groovy (pipelines as code), and the pipeline DSL is designed to be pluggable, so any given plugin may contribute with its own idioms to the pipeline DSL, as well as extended through custom functions bundled in Jenkins libraries.
+
+The combination of a powerful dynamic language as Groovy, with the rich semantics of the available DSLs, allows developers to write simple, expressive pipelines, while having all the freedom to customize the pipeline behavior up to the smallest detail.
 
 The pipeline main construct is the `pipeline` block element. Inside any `pipeline` element there will be any number of second-level constructs, being the main ones:
 
-- `agent`: Used to define how the pipeline will be executed. For example, in a specific slave or in a container created from an existing Docker image.
+- `agent`: Used to define how the pipeline will be executed. For example, in a specific agent node or in a container created from an existing Docker image.
 - `environment`: Used to define pipeline properties. For example, define a container name from the given build number, or define a credential password by reading its value from Jenkins credentials manager.
 - `stages`: The main block, where all stages and steps are defined.
 - `post`: Used to define any post-process activities, like resource cleaning or results publishing.
@@ -126,8 +181,6 @@ Inside the `stages` element, there will be nested at least one `stage` element, 
 In a nutshell, the following is a skeleton of a typical Jenkins pipeline:
 
 ```groovy
-#!groovy
-
 pipeline {
     agent {
         // how the pipeline will be built
@@ -169,254 +222,35 @@ Typical steps include the following:
 
 With the building blocks just explained, as well as others, it is possible to model any continuous integration process.
 
-## Verification activities along the pipeline
+### 2.2. Validation activities along the pipeline
 
-An effective continuous integration pipeline must have sufficient verification steps as to give confidence in the process. Verification steps will include code inspection, and testing:
+An effective continuous integration pipeline must have sufficient validation steps as to give confidence in the process. Validation steps will generally be grouped in code inspection and testing tasks:
 
-Code inspection activities are basically three:
+Code inspection tasks are basically three:
 
 - **Gathering of metrics**: Size, complexity, code duplications, and others related with architecture and design implementation.
-- **Static code profiling**: Analysis of sources looking for known patterns that may result in vulnerabilities, reliability issues, performance issues, or affect maintainability.
+- **Static code profiling**: Analysis of source code looking for known patterns that may result in security vulnerabilities, reliability issues, performance issues, or affect maintainability.
 - **Dependency analysis**: Analysis of dependency manifests (e.g. those included in `pom.xml` or `require.js` files), looking for known vulnerabilities in those dependencies, as published in well-known databases like CVE.
 
-Testing activities will include the following:
+Testing tasks will include the following:
 
-- **Unit tests**.
-- **Unit-integration tests**: Those that, although not requiring the application to be deployed, are testing multiple components together. For example, in-container tests.
-- **Integration tests**: Including in this group all those kinds of tests that require the application to be deployed. Typically external dependencies will be mocked up in this step. Integration tests will include API tests and UI tests.
-- **Performance tests**: Tests verifying how the service or component behaves under load. Performance tests in this step are not meant to assess the overall system capacity (which can be virtually infinite with the appropriate scaling patterns), but to assess the capacity of one node, uncover concurrence issues due to the parallel execution of tasks, as well as to pinpoint possible bottlenecks or resource leaks when studying the trend. Very useful at this step to leverage APM tools to gather internal JVM metrics, e.g. to analyze gargabe collection.
+- **Unit tests**: Those that run at the component or function level, not requiring any dependency to be available at test time. E.g., simple tests on a class or specific methods.
+- **Unit-integration tests**: Those that, although not requiring the application to be deployed, are testing multiple components together. For example, in-container tests. In terms of the technical mechanism to run these tests, they may be indistinguisable from unit tests. In practice, many times they will be executed altogether (e.g., run `mvn test` command).
+- **Integration tests**: In this group are included all those tests that require the application to be deployed and with its internal dependencies integrated (including data stores such as a relational database). Typically external dependencies will be mocked up in this step (e.g., a third-pary billing system). Integration tests will include API tests and UI tests, but may require of other specialized tests (e.g., to test batch processes).
+- **Performance tests**: Tests verifying how the service or component behaves under load. Performance tests in this step are not meant to assess the overall system capacity (which can be virtually infinite with the appropriate scaling patterns), but to assess the capacity of single instances, uncover concurrence issues due to the parallel execution of tasks, as well as to pinpoint possible bottlenecks or resource leaks when studying the trend. Very useful at this step to leverage APM tools to gather internal JVM metrics, e.g. to analyze gargabe collection pauses and effectiveness.
 - **Security tests**: Tests assessing possible vulnerabilities exposed by the application. In this step, the kind of security tests performed are typically DAST analysis.
 
 In addition to the previous kinds of tests, there is one more which is meant to assess the quality of tests:
 
-- **Mutation tests**: Mutation testing, usually executed only on unit tests for the sake of execution time, is a technique that identifies changes in source code, the so called mutations, applies them and re-execute the corresponding unit tests. If after a change in the source code, unit tests do not fail, that means that either the test code does not have assertions, or there are assertions but test coverage is unsufficient (typically test cases with certain conditions not tested). Mutation testing will uncover untested test cases, test cases without assertions and test cases with insufficient or wrong assertions.
+- **Mutation tests**: Mutation testing, usually executed only on unit tests for the sake of total build duration, is a technique that identifies changes in source code, the so called mutations, applies them and re-execute the corresponding unit tests. If after a change in the source code the unit tests do not fail, that means that either the test code does not have assertions, or the assertions are insufficient to uncover the bug, typically because test cases with certain conditions are not implemented. Therefore, mutation testing will uncover untested test cases, test cases without assertions and test cases with insufficient or wrong assertions, which is arguably a better way to find out about the test suite quality than just gathering test code coverage metrics.
 
-To enable these tools along the lifecycle, and to align developer workstation usage with CI server pipeline usage, the recommended approach is to configure these activities with the appropriate tools in Maven's `pom.xml`, storing the corresponding test scripts, data and configuration, along with the source code in the `src/test` folder (very commonly done for unit tests, and also recommended for the other kinds of tests).
+### 2.3. Enabling code inspection and testing tools in the lifecycle
 
-## Explaining stuff in Maven's pom.xml
+To enable these tools along the lifecycle, and to align developer workstation build results with CI server build results, the recommended approach is to configure these activities with the appropriate development lifecycle tools.
 
-### Adding JaCoCo agent to gather code coverage metrics during tests
+For example, in the case of the Java ecosystem, a wise choice is to leverage Maven lifecycle as modeled in the `pom.xml` file, while storing the corresponding test scripts, data and configuration in the `src/test` folder (very commonly done for unit tests, and also recommended for the other kinds of tests), in the same repository as application source code.
 
-One of the actions to be done along the pipeline, is to gather code coverage metrics when unit tests and integration tests are executed. To do that, there are a few actions needed in preparation for the task.
-
-First, the JaCoCo agent must be added as a Maven dependency in `pom.xml`:
-
-```xml
-    <dependencies>
-        ...
-        <dependency>
-            <groupId>org.jacoco</groupId>
-            <artifactId>org.jacoco.agent</artifactId>
-            <version>0.8.8</version>
-            <classifier>runtime</classifier>
-            <scope>test</scope>
-        </dependency>
-        ...
-    </dependencies>
-```
-
-To enable the gathering of code coverage metrics during unit tests, the agent provides a goal to prepare the needed JVM argument. Another possible approach, to ensure that the agent is always enabled, is to pass the JVM argument directly to Surefire plugin:
-
-```xml
-    <build>
-        ...
-        <plugins>
-            ...
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.2</version>
-                <configuration>
-                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.8/org.jacoco.agent-0.8.8-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
-                    <excludes>
-                        <exclude>**/*IntegrationTest.java</exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-            ...
-        </plugins>
-        ...
-    </build>
-```
-
-For integration tests, the code coverage setup is a bit more complicated. Instead of enabling the agent in the test executor, it is the test server the process that must have the agent enabled. The former approach works for unit tests because the same JVM process holds both the test code and the code for the application being tested. However for integration tests, the test execution is a separate process from the application being tested.
-
-As the application is packaged and runs as a Docker image, the agent file must be present at the image build time. Later, during the execution of integration tests, the JaCoCo CLI tool will be needed to dump the coverage data from the test server. To do that, both dependencies will be copied into the expected folder with the help of the Maven Dependency plugin:
-
-```xml
-    <build>
-        ...
-        <plugins>
-            ...
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.1.1</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>copy</goal>
-                        </goals>
-                        <configuration>
-                            <artifactItems>
-                                <artifactItem>
-                                    <groupId>org.jacoco</groupId>
-                                    <artifactId>org.jacoco.agent</artifactId>
-                                    <version>0.8.8</version>
-                                    <classifier>runtime</classifier>
-                                    <destFileName>jacocoagent.jar</destFileName>
-                                </artifactItem>
-                                <artifactItem>
-                                    <groupId>org.jacoco</groupId>
-                                    <artifactId>org.jacoco.cli</artifactId>
-                                    <version>0.8.8</version>
-                                    <classifier>nodeps</classifier>
-                                    <destFileName>jacococli.jar</destFileName>
-                                </artifactItem>
-                            </artifactItems>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            ...
-        </plugins>
-        ...
-    </build>
-```
-
-And finally, the JaCoCo agent needs to be copied into the Docker image. Edit the file `Dockerfile` and add a new `ADD` instruction after `VOLUME`:
-
-```dockerfile
-    ...
-    VOLUME /tmp
-    ADD target/dependency/jacocoagent.jar jacocoagent.jar
-    ...
-```
-
-### Configuring Failsafe for integration test execution
-
-Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twin for integration tests, is disabled by default. To enable Failsafe, its targets must be called explicitely or alternatively may be binded to the corresponding lifecycle goals. To better control its execution in the pipeline it is preferred to disable Failsafe by default:
-
-```xml
-    <build>
-        ...
-        <plugins>
-            ...
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <version>2.22.2</version>
-                <configuration>
-                    <includes>
-                        <include>**/*IntegrationTest.java</include>
-                    </includes>
-                </configuration>
-            </plugin>
-            ...
-        </plugins>
-        ...
-    </build>
-```
-
-In addition to the optional automatic activation of Failsafe, the configuration includes the execution filter: the pattern to recognize which test classes are integration tests vs. unit tests.
-
-### Adding performance tests with Apache JMeter
-
-The next addition to the project configuration is the addition of performance tests with Apache JMeter.
-
-Besides the addition of the plugin, and optionally enabling the automatic execution of the plugin targets, the configuration will include three properties that will be injected into the scripts. Those properties - host, port, context root - are needed so the script can be executed regardless of where the application being tested is exposed, which is usually only known at runtime when the container is run:
-
-```xml
-    <build>
-        ...
-        <plugins>
-            ...
-            <plugin>
-                <groupId>com.lazerycode.jmeter</groupId>
-                <artifactId>jmeter-maven-plugin</artifactId>
-                <version>3.5.0</version>
-                <configuration>
-                    <testResultsTimestamp>false</testResultsTimestamp>
-                    <propertiesUser>
-                        <host>${jmeter.target.host}</host>
-                        <port>${jmeter.target.port}</port>
-                        <root>${jmeter.target.root}</root>
-                    </propertiesUser>
-                </configuration>
-            </plugin>
-            ...
-        </plugins>
-        ...
-    </build>
-```
-
-### Configuring mutation testing
-
-The next step is to configure mutation testing with Pitest.
-
-As mutation testing works better with strict unit tests, the plugin configuration should exclude application (in-container) tests and integration tests. If left enabled, mutation testing is likely to take a very long time to finish, and results obtained are likely to not be useful at all.
-
-It is also needed to enable JUnit 5 support in Pitest explicitly by adding the corresponding dependency.
-
-```xml
-    <build>
-        ...
-        <plugins>
-            ...
-            <plugin>
-                <groupId>org.pitest</groupId>
-                <artifactId>pitest-maven</artifactId>
-                <version>1.5.2</version>
-                <configuration>
-                    <excludedTestClasses>
-                        <param>*ApplicationTests</param>
-                        <param>*IntegrationTest</param>
-                    </excludedTestClasses>
-                    <outputFormats>
-                        <outputFormat>XML</outputFormat>
-                    </outputFormats>
-                </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.pitest</groupId>
-                        <artifactId>pitest-junit5-plugin</artifactId>
-                        <version>0.11</version>
-                    </dependency>
-                </dependencies>
-            </plugin>
-            ...
-        </plugins>
-        ...
-    </build>
-```
-
-Due to how Pitest plugin works, it will fail when there are no mutable tests i.e. no strict unit tests. Considering this, the pipelines corresponding to services without mutable tests should skip the execution of Pitest.
-
-### Configuring dependency vulnerability scans with OWASP
-
-OWASP is a global organization focused on secure development practices. OWASP also owns several open source tools, including OWASP Dependency Check. Dependency Check scans dependencies from a project manifest, like the `pom.xml` file, and checks them with the online repository of known vulnerabilities (CVE, maintained by NIST), for every framework artefact, and version.
-
-Adding support for Dependency Check scans is as simple as adding the corresponding Maven plug-in to `pom.xml`:
-
-```xml
-    <build>
-        ...
-        <plugins>
-            ...
-            <plugin>
-                <groupId>org.owasp</groupId>
-                <artifactId>dependency-check-maven</artifactId>
-                <version>5.3.2</version>
-                <configuration>
-                    <format>ALL</format>
-                </configuration>
-            </plugin>
-            ...
-        </plugins>
-        ...
-    </build>
-```
+Although it is not the purpose of this workshop to go into Maven details, I have provided at the end of this guideline an appendix about specific configurations and how they enable tool integration as described above.
 
 ## Orchestrating the build - the continuous integration pipeline
 
@@ -757,3 +591,254 @@ pipeline {
 Once all the pieces are together, pipelines configured for every service in our system, it's the time to add the job to Jenkins and execute it.
 
 Green balls!
+
+## Adding SonarQube for code inspection and static vulnerability analysis
+
+### SonarQube configuration
+
+To integrate SonarQube with Jenkins, the Jenkins plugin must be configured to reach out to the right SonarQube instance when required.
+
+Before configuring that integration, a SonarQube API token must be created. That token is required to authenticate requests coming from Jenkins.
+
+Login to SonarQube using the default credentials: both username and password are simply `admin`. On first run, a tutorial wizard will show but it can be skipped for now.
+
+Click on `Administration` on the top menu and afterwards on `Security` and `Users` in the horizonal menu below. In the `Administrator` user configuration row, there is a menu icon to the right with the label `Update Tokens`. Click on it, and in the pop-up dialog, in the text box below `Generate Tokens` enter `ci-sonarqube` (or any other meaningful name) and press the `Generate` button. The API token will be shown below. Take note of it, as this is the last time it will be shown in the UI.
+
+Before leaving SonarQube, let's configure the webhook that will be leveraged by SonarQube to let Jenkins know that a requested analysis has finished.
+
+Click on `Administration` on the top menu and afterwards on `Configuration`and `Webhooks` in the horizontal menu below. Click the `Create` button. Enter `ci-jenkins` for the webhook name, and for the URL, the Jenkins home URL appending `/sonarqube-webhook`. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9080/jenkins/sonarqube-webhook`. Click the `Create` button and configuration on the SonarQube side is ready.
+
+Login to Jenkins with the previously configured administrator credentials.
+
+Click on `Manage Jenkins` menu option and next click on `Manage Credentials` menu option. In the credentials store table, click on the link labeled as `(global)` for the Jenkins global domain.
+
+Next, click on `Add Credentials` in the left menu. In the credential kind select `Secret text`. The secret value is the API token just generated. The secret id can be `ci-sonarqube` as well. Press `Create` when finished to save the credentials in the store.
+
+Next, let's configure the SonarQube server integration. Go back to the dashboard, click on `Manage Jenkins` menu option and next click on `Configure System` menu option. Scroll down until the section `SonarQube Servers` is visible. Click the checkbox to allow injection of server configuration.
+
+Next, let's add the SonarQube instance name and URL. To ensure that the right server is used by the pipeline use `ci-sonarqube` for the instance name. If the selected name is different, it should match the name referenced in the pipeline later. For the server URL, use the SonarQube home URL. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9000/sonarqube`. Finally, for the server authentication token, use the API token stored in the `ci-sonarqube` credential created before. Click the `Save` button and configuration on the Jenkins side is ready.
+
+## APPENDIX. Explaining stuff in Maven's pom.xml
+
+### Adding JaCoCo agent to gather code coverage metrics during tests
+
+One of the actions to be done along the pipeline, is to gather code coverage metrics when unit tests and integration tests are executed. To do that, there are a few actions needed in preparation for the task.
+
+First, the JaCoCo agent must be added as a Maven dependency in `pom.xml`:
+
+```xml
+    <dependencies>
+        ...
+        <dependency>
+            <groupId>org.jacoco</groupId>
+            <artifactId>org.jacoco.agent</artifactId>
+            <version>0.8.8</version>
+            <classifier>runtime</classifier>
+            <scope>test</scope>
+        </dependency>
+        ...
+    </dependencies>
+```
+
+To enable the gathering of code coverage metrics during unit tests, the agent provides a goal to prepare the needed JVM argument. Another possible approach, to ensure that the agent is always enabled, is to pass the JVM argument directly to Surefire plugin:
+
+```xml
+    <build>
+        ...
+        <plugins>
+            ...
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.22.2</version>
+                <configuration>
+                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.8/org.jacoco.agent-0.8.8-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            ...
+        </plugins>
+        ...
+    </build>
+```
+
+For integration tests, the code coverage setup is a bit more complicated. Instead of enabling the agent in the test executor, it is the test server the process that must have the agent enabled. The former approach works for unit tests because the same JVM process holds both the test code and the code for the application being tested. However for integration tests, the test execution is a separate process from the application being tested.
+
+As the application is packaged and runs as a Docker image, the agent file must be present at the image build time. Later, during the execution of integration tests, the JaCoCo CLI tool will be needed to dump the coverage data from the test server. To do that, both dependencies will be copied into the expected folder with the help of the Maven Dependency plugin:
+
+```xml
+    <build>
+        ...
+        <plugins>
+            ...
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.1.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>org.jacoco</groupId>
+                                    <artifactId>org.jacoco.agent</artifactId>
+                                    <version>0.8.8</version>
+                                    <classifier>runtime</classifier>
+                                    <destFileName>jacocoagent.jar</destFileName>
+                                </artifactItem>
+                                <artifactItem>
+                                    <groupId>org.jacoco</groupId>
+                                    <artifactId>org.jacoco.cli</artifactId>
+                                    <version>0.8.8</version>
+                                    <classifier>nodeps</classifier>
+                                    <destFileName>jacococli.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            ...
+        </plugins>
+        ...
+    </build>
+```
+
+And finally, the JaCoCo agent needs to be copied into the Docker image. Edit the file `Dockerfile` and add a new `ADD` instruction after `VOLUME`:
+
+```dockerfile
+    ...
+    VOLUME /tmp
+    ADD target/dependency/jacocoagent.jar jacocoagent.jar
+    ...
+```
+
+### Configuring Failsafe for integration test execution
+
+Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twin for integration tests, is disabled by default. To enable Failsafe, its targets must be called explicitely or alternatively may be binded to the corresponding lifecycle goals. To better control its execution in the pipeline it is preferred to disable Failsafe by default:
+
+```xml
+    <build>
+        ...
+        <plugins>
+            ...
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>2.22.2</version>
+                <configuration>
+                    <includes>
+                        <include>**/*IntegrationTest.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+            ...
+        </plugins>
+        ...
+    </build>
+```
+
+In addition to the optional automatic activation of Failsafe, the configuration includes the execution filter: the pattern to recognize which test classes are integration tests vs. unit tests.
+
+### Adding performance tests with Apache JMeter
+
+The next addition to the project configuration is the addition of performance tests with Apache JMeter.
+
+Besides the addition of the plugin, and optionally enabling the automatic execution of the plugin targets, the configuration will include three properties that will be injected into the scripts. Those properties - host, port, context root - are needed so the script can be executed regardless of where the application being tested is exposed, which is usually only known at runtime when the container is run:
+
+```xml
+    <build>
+        ...
+        <plugins>
+            ...
+            <plugin>
+                <groupId>com.lazerycode.jmeter</groupId>
+                <artifactId>jmeter-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <testResultsTimestamp>false</testResultsTimestamp>
+                    <propertiesUser>
+                        <host>${jmeter.target.host}</host>
+                        <port>${jmeter.target.port}</port>
+                        <root>${jmeter.target.root}</root>
+                    </propertiesUser>
+                </configuration>
+            </plugin>
+            ...
+        </plugins>
+        ...
+    </build>
+```
+
+### Configuring mutation testing
+
+The next step is to configure mutation testing with Pitest.
+
+As mutation testing works better with strict unit tests, the plugin configuration should exclude application (in-container) tests and integration tests. If left enabled, mutation testing is likely to take a very long time to finish, and results obtained are likely to not be useful at all.
+
+It is also needed to enable JUnit 5 support in Pitest explicitly by adding the corresponding dependency.
+
+```xml
+    <build>
+        ...
+        <plugins>
+            ...
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>1.5.2</version>
+                <configuration>
+                    <excludedTestClasses>
+                        <param>*ApplicationTests</param>
+                        <param>*IntegrationTest</param>
+                    </excludedTestClasses>
+                    <outputFormats>
+                        <outputFormat>XML</outputFormat>
+                    </outputFormats>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>0.11</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+            ...
+        </plugins>
+        ...
+    </build>
+```
+
+Due to how Pitest plugin works, it will fail when there are no mutable tests i.e. no strict unit tests. Considering this, the pipelines corresponding to services without mutable tests should skip the execution of Pitest.
+
+### Configuring dependency vulnerability scans with OWASP
+
+OWASP is a global organization focused on secure development practices. OWASP also owns several open source tools, including OWASP Dependency Check. Dependency Check scans dependencies from a project manifest, like the `pom.xml` file, and checks them with the online repository of known vulnerabilities (CVE, maintained by NIST), for every framework artefact, and version.
+
+Adding support for Dependency Check scans is as simple as adding the corresponding Maven plug-in to `pom.xml`:
+
+```xml
+    <build>
+        ...
+        <plugins>
+            ...
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>5.3.2</version>
+                <configuration>
+                    <format>ALL</format>
+                </configuration>
+            </plugin>
+            ...
+        </plugins>
+        ...
+    </build>
+```

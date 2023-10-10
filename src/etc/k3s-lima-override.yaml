@@ -1,0 +1,10 @@
+# copy to ~/Library/Application\ Support/rancher-desktop/lima/_config/override.yaml
+provision:
+- mode: system
+  script: |
+    #!/bin/sh
+    sysctl -w vm.max_map_count=262144
+mounts:
+- location: /Users/<<username>>/data
+  mountPoint: /data
+  writable: true

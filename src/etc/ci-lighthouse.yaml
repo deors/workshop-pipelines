@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ci-lighthouse-data-pv
+  labels:
+    type: local
+spec:
+  storageClassName: local-path
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/ci-lighthouse-data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ci-lighthouse-data-pvc
+  annotations:
+    volumeType: local
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ci-lighthouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-lighthouse
+  template:
+    metadata:
+      labels:
+        app: ci-lighthouse
+    spec:
+      containers:
+        - name: lhci-server
+          image: patrickhulce/lhci-server:0.12.0
+          resources:
+            requests:
+              cpu: "0.5"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1024Mi"
+          volumeMounts:
+            - name: ci-lighthouse-data
+              mountPath: /data
+      volumes:
+        - name: ci-lighthouse-data
+          persistentVolumeClaim:
+            claimName: ci-lighthouse-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ci-lighthouse
+spec:
+  selector:
+    app: ci-lighthouse
+  ports:
+    - name: web
+      port: 9001
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ci-lighthouse
+  annotations:
+    spec.ingressClassName: traefik
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /lighthouse
+        pathType: Prefix
+        backend:
+          service:
+            name: ci-lighthouse
+            port:
+              number: 9001

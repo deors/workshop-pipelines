@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ci-jenkins-home-pv
+  labels:
+    type: local
+spec:
+  storageClassName: local-path
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/ci-jenkins-home"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ci-jenkins-home-pvc
+  annotations:
+    volumeType: local
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ci-jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-jenkins
+  template:
+    metadata:
+      labels:
+        app: ci-jenkins
+    spec:
+      containers:
+        - name: jenkins
+          image: docker.io/jenkins/jenkins:2.426-jdk17
+          resources:
+            requests:
+              cpu: "0.5"
+              memory: "1024Mi"
+            limits:
+              cpu: "1"
+              memory: "2048Mi"
+          env:
+            - name: JENKINS_OPTS
+              value: "--httpPort=9090 --prefix=/jenkins"
+          securityContext:
+            runAsUser: 0
+            privileged: true
+          volumeMounts:
+            - name: ci-jenkins-home
+              mountPath: /var/jenkins_home
+      volumes:
+        - name: ci-jenkins-home
+          persistentVolumeClaim:
+            claimName: ci-jenkins-home-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ci-jenkins
+spec:
+  selector:
+    app: ci-jenkins
+  ports:
+    - name: web
+      port: 9090
+    - name: remoting
+      port: 50000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ci-jenkins
+  annotations:
+    spec.ingressClassName: traefik
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /jenkins
+        pathType: Prefix
+        backend:
+          service:
+            name: ci-jenkins
+            port:
+              number: 9090
