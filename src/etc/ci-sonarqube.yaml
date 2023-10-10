@@ -1,68 +1,183 @@
 apiVersion: v1
-kind: Pod
+kind: PersistentVolume
+metadata:
+  name: ci-sonarqube-data-pv
+  labels:
+    type: local
+spec:
+  storageClassName: local-path
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/ci-sonarqube-data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ci-sonarqube-data-pvc
+  annotations:
+    volumeType: local
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ci-sonarqube-extensions-pv
+  labels:
+    type: local
+spec:
+  storageClassName: local-path
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/ci-sonarqube-extensions"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ci-sonarqube-extensions-pvc
+  annotations:
+    volumeType: local
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ci-sonarqube-esdata-pv
+  labels:
+    type: local
+spec:
+  storageClassName: local-path
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/ci-sonarqube-esdata"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ci-sonarqube-esdata-pvc
+  annotations:
+    volumeType: local
+spec:
+  storageClassName: local-path
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: ci-sonarqube-data
 spec:
-  containers:
-    - name: postgres
-      image: docker.io/postgres:13.7
-      resources:
-        requests:
-          cpu: "0.25"
-          memory: "256Mi"
-        limits:
-          cpu: "0.5"
-          memory: "512Mi"
-      env:
-        - name: POSTGRES_USER
-          value: "sonarqube"
-        - name: POSTGRES_PASSWORD
-          value: "sonar99sonar"
-      volumeMounts:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-sonarqube-data
+  template:
+    metadata:
+      labels:
+        app: ci-sonarqube-data
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/postgres:13.7
+          resources:
+            requests:
+              cpu: "0.25"
+              memory: "256Mi"
+            limits:
+              cpu: "0.5"
+              memory: "512Mi"
+          env:
+            - name: POSTGRES_USER
+              value: "sonarqube"
+            - name: POSTGRES_PASSWORD
+              value: "sonar99sonar"
+          securityContext:
+            runAsUser: 501
+          volumeMounts:
+            - name: ci-sonarqube-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
         - name: ci-sonarqube-data
-          mountPath: /var/lib/postgresql/data
-  volumes:
-    - name: ci-sonarqube-data
-      hostPath:
-        path: /data/ci-sonarqube-data
-        type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: ci-sonarqube-data-pvc
 ---
 apiVersion: v1
-kind: Pod
+kind: Service
+metadata:
+  name: ci-sonarqube-data
+spec:
+  selector:
+    app: ci-sonarqube-data
+  ports:
+    - name: psql
+      port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: ci-sonarqube
 spec:
-  containers:
-    - name: sonarqube
-      image: docker.io/sonarqube:9.9.1-community
-      resources:
-        requests:
-          cpu: "0.5"
-          memory: "1024Mi"
-        limits:
-          cpu: "1"
-          memory: "2048Mi"
-      env:
-        - name: SONAR_JDBC_URL
-          value: "jdbc:postgresql://ci-sonarqube-data:5432/sonarqube?charSet=UNICODE"
-        - name: SONAR_JDBC_USERNAME
-          value: "sonarqube"
-        - name: SONAR_JDBC_PASSWORD
-          value: "sonar99sonar"
-      volumeMounts:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-sonarqube
+  template:
+    metadata:
+      labels:
+        app: ci-sonarqube
+    spec:
+      containers:
+        - name: sonarqube
+          image: docker.io/sonarqube:9.9.1-community
+          resources:
+            requests:
+              cpu: "0.5"
+              memory: "1024Mi"
+            limits:
+              cpu: "1"
+              memory: "2048Mi"
+          env:
+            - name: SONAR_JDBC_URL
+              value: "jdbc:postgresql://ci-sonarqube-data:5432/sonarqube?charSet=UNICODE"
+            - name: SONAR_JDBC_USERNAME
+              value: "sonarqube"
+            - name: SONAR_JDBC_PASSWORD
+              value: "sonar99sonar"
+          volumeMounts:
+            - name: ci-sonarqube-extensions
+              mountPath: /opt/sonarqube/extensions
+            - name: ci-sonarqube-esdata
+              mountPath: /opt/sonarqube/data
+      volumes:
         - name: ci-sonarqube-extensions
-          mountPath: /opt/sonarqube/extensions
+          persistentVolumeClaim:
+            claimName: ci-sonarqube-extensions-pvc
         - name: ci-sonarqube-esdata
-          mountPath: /opt/sonarqube/data
-  volumes:
-    - name: ci-sonarqube-extensions
-      hostPath:
-        path: /data/ci-sonarqube-extensions
-        type: DirectoryOrCreate
-    - name: ci-sonarqube-esdata
-      hostPath:
-        path: /data/ci-sonarqube-esdata
-        type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: ci-sonarqube-esdata-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -70,7 +185,7 @@ metadata:
   name: ci-sonarqube
 spec:
   selector:
-    app.kubernetes.io/name: ci-sonarqube
+    app: ci-sonarqube
   ports:
     - name: web
       port: 9000
