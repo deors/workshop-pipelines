@@ -56,7 +56,7 @@ The only service available at this point should be precisely the Kubernetes serv
 
 ### 1.2. Run Jenkins
 
-To run Jenkins, let's use the official image, adding a persistent volume and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
+To run Jenkins, let's use the official image, adding a persistent volume for Jenkins data, and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
 
     kubectl apply -f src/etc/ci-jenkins.yaml
 
@@ -64,11 +64,7 @@ To verify that the whole deployment was right, use the following command:
 
     kubectl get all,ingress,pv,pvc
 
-You should see that a pod, service, deployment, replica set, ingress, persistent volume, and persistent volume claim object are created in the cluster.
-
-Take note of the IP address for the Jenkins master service as it will be needed later to configure the integration between Jenkins and the cluster. In my own tests, there are situations in which K3s networking does not work as intended (e.g., moving the workstation from home wifi to office wifi). As a workaround, it is possible to use the Jenkins master pod IP instead of the service IP. To easily get the pod IP you may run this command (use the pod id listed by previous `kubectl get` command):
-
-    kubectl describe pod/ci-jenkins-<<rest-of-pod-id>> | grep IP:
+You should see that a pod, service, deployment, replica set, ingress, persistent volume, and persistent volume claim objects are created in the cluster.
 
 ### 1.3. Configure Jenkins
 
@@ -85,9 +81,10 @@ Next step is to install the initial set of plugins. Starting with the suggested 
 
 To complete the wizard, create the first administrator user. Take note of the user and password as it will be required to login into Jenkins from now on. I strongly recommend to not use typical passwords as `admin`, `adminadmin`, or `12345` as some King Roland would do.
 
-Once the Jenkins setup wizard finishes the initial configuration, there are few other plugins that will be used in the pipeline. To install them, click on the `Manage Jenkins` left menu option and next click on the `Plugins` center menu option (under `System Configuration` section). Click on the `Available plugins` left menu option, search iteratively for each one of the plugins, click the selection checkbox and then when ready push the `Install` button. The required plugins are:
+Once the Jenkins setup wizard finishes the initial configuration, there are few other plugins that will be used in the pipeline. To install them, click on the `Manage Jenkins` left menu option and next click on the `Plugins` center menu option (under `System Configuration` section). Click on the `Available plugins` left menu option, search iteratively for each one of the plugins, click on the selection checkbox and then when ready push the `Install` button. The required plugins are:
 
 - `Kubernetes`
+- `Kubernetes CLI`
 - `Pipeline Utility Steps`
 - `JaCoCo`
 - `OWASP Dependency-Check`
@@ -96,17 +93,17 @@ Once the Jenkins setup wizard finishes the initial configuration, there are few 
 
 ### 1.4. Configure Jenkins integration with Kubernetes
 
-Once the plug-ins are ready, let's configure the Kubernetes cloud to launch our builds. Click on the `Manage Jenkins` left menu option and next click on the `Clouds` center menu option (under `System Configuration` section). Click the `New cloud` center menu option, use a reasonable name (e.g., `k3s-lima-vm`), select that the cloud is of `Kubernetes` type, and click the `Create` button.
+Once the plug-ins are ready, let's configure the Kubernetes cloud to launch our builds. Click on the `Manage Jenkins` left menu option and next click on the `Clouds` center menu option (under `System Configuration` section). Click on the `New cloud` center menu option, use a reasonable name (e.g., `k3s-lima-vm`), select that the cloud is of `Kubernetes` type, and click on the `Create` button.
 
-Expand the `Kubernetes Cloud details` section and pay special attention to these settings are they are very sensitive to your specific networking configuration.
+Expand the `Kubernetes Cloud details` section and pay special attention to these settings as they are very sensitive to your specific environment:
 
-The Kubernetes URL must be set so it is accessible from the Jenkins pod (remember, this is why `127.0.0.1` was not an option). The cluster IP address noted before should be a good and predictable way to get the Jenkins master and the cluster API integrated from within the cluster internal network. The local workstation IP may also be an option but I've found out in my own experiments that is not reliable.
+- The Kubernetes URL is needed by the Jenkins master pod to connect with the cluster API and request to run build pods when needed. The cluster IP address noted before should be a good and predictable way to get the Jenkins master and the cluster API connected from within the cluster internal network.
 
-The Jenkins URL must be set so any pod scheduled to run a build is able to connect with the Jenkins master. Use the Jenkins master service/pod IP address noted before to configure this. If you have deployed Jenkins with the provided YAML file, the Jenkins master should be listening in `9090` port.
+- The Jenkins URL must be set so any pod scheduled to run a build is able to connect the Jenkins agent with the Jenkins master. Using the internal cluster DNS the URL will be `http://ci-jenkins:9090/jenkins`.
 
-The credential needed is the Kubeconfig file prepared a few steps before. Click the `Add` button, select `Jenkins` as the credentials provider, select `Secret file` as the kind of credential, and upload the Kubeconfig from the folder where it was stored before. Choose a representative id for the credential (e.g., `k3s-lima-vm-kubeconfig`) and click the `Add` button when finished. This credential is going to be needed in the pipeline, so take note of the id for later.
+- The credential needed is the Kubeconfig file prepared a few steps before. Click on the `Add` button, select `Jenkins` as the credentials provider, select `Secret file` as the kind of credential, and upload the Kubeconfig from the folder where it was stored before. Choose a representative id for the credential (e.g., `k3s-lima-vm-kubeconfig`) and click on the `Add` button when finished.
 
-Use the `Test Connection` button to check that all settings are ok. Click the `Save` button to finish the configuration.
+Use the `Test Connection` button to check that all settings are ok. Click on the `Save` button to finish the configuration.
 
 ### 1.5. Configure credentials for Docker Hub
 
@@ -116,13 +113,13 @@ Click on the `Manage Jenkins` left menu option, next click on the `Credentials` 
 
 Next, click on the `Add Credentials` button and enter the credentials needed to access Docker Hub (kind `Username with password`).
 
-In the `ID` field, enter the credential id as it is going to be referenced from the pipeline, e.g. use `docker-hub-<<myorgname>>` where `<<myorgname>>` is the organization name in Docker Hub. Press `Create` when finished to save the credentials in the store.
+In the `ID` field, enter the credential id as it is going to be referenced from the pipeline, e.g. use `docker-hub-<YOUR_ORG_NAME>` where `<YOUR_ORG_NAME>` is the organization name in Docker Hub. Press `Create` when finished to save the credentials in the store.
 
 ### 1.6. Create and run a test job
 
 Although in the previous step the connection between Jenkins and K3s was tested, it does not mean that a job will run. In particular, the Jenkins URL that was configured is key as it is used from the pod to attach the Jenkins agent to the master. That setting is not verified when the connection was tested, so let's create a very simple test job to verify the whole integration.
 
-From Jenkins home click the `Create a job` center menu option. As the job name use a representative name (e.g., `test-k3s-integration`), and for the type select `Pipeline` and click the `OK` button at the bottom.
+From Jenkins home click on the `Create a job` center menu option. As the job name use a representative name (e.g., `test-k3s-integration`), and for the type select `Pipeline` and click on the `OK` button at the bottom.
 
 Scroll down a bit, and in the `Pipeline` section, ensure that the definition is of kind `Pipeline script` and use the following code to define the pipeline. Do not pay too much attention now to its syntax, as I will explain in a bit the anatomy of a pipeline:
 
@@ -155,7 +152,7 @@ containers:
 }
 ```
 
-Click the `Save` button at the bottom of the page, and on the job page select the `Build Now` left menu option.
+Click on the `Save` button at the bottom of the page, and on the job page select the `Build Now` left menu option.
 
 If everything is well configured, the job console will show how the pod is scheduled, the Jenkins agent registers with the master, and the simple `java -version` command is executed demonstrating that the JDK image was downloaded and it was possible to run the tool inside the container.
 
@@ -244,19 +241,19 @@ In addition to the previous kinds of tests, there is one more which is meant to 
 
 - **Mutation tests**: Mutation testing, usually executed only on unit tests for the sake of total build duration, is a technique that identifies changes in source code, the so called mutations, applies them and re-execute the corresponding unit tests. If after a change in the source code the unit tests do not fail, that means that either the test code does not have assertions, or the assertions are insufficient to uncover the bug, typically because test cases with certain conditions are not implemented. Therefore, mutation testing will uncover untested test cases, test cases without assertions and test cases with insufficient or wrong assertions, which is arguably a better way to find out about the test suite quality than just gathering test code coverage metrics.
 
-### 2.3. Enabling code inspection and testing tools in the lifecycle
+### 2.3. Integrate code inspection and testing tools in the lifecycle
 
 To enable these tools along the lifecycle, and to align developer workstation build results with CI server build results, the recommended approach is to configure these activities with the appropriate development lifecycle tools.
 
-For example, in the case of the Java ecosystem, a wise choice is to leverage Maven lifecycle as modeled in the `pom.xml` file, while storing the corresponding test scripts, data and configuration in the `src/test` folder (very commonly done for unit tests, and also recommended for the other kinds of tests), in the same repository as application source code.
+For example, in the case of the Java ecosystem, a wise choice is to leverage the Apache Maven lifecycle as modeled in the `pom.xml` file, while storing the corresponding test scripts, data and configuration in the `src/test` folder (very commonly done for unit tests, and also recommended for the other kinds of tests), altogether in the same repository as application source code.
 
-Although it is not the purpose of this workshop to go into Maven details, I have provided at the end of this guideline an appendix about specific configurations and how they enable tool integration as described above.
+Although it is not the purpose of this workshop to go into Maven details, I have provided at the end of the workshop guideline an appendix about specific Maven configurations and how they enable tool integration as described above.
 
-## Orchestrating the build - the continuous integration pipeline
+## Part 3. Build orchestration - the continuous integration pipeline
 
 The stages that are proposed as a best practice, are the following:
 
-- **Environment preparation**: This stage is used to get and configure all needed dependencies. Typically in a Java with Maven or Gradle pipeline, it is skipped as Maven and Gradle handle dependency resolution and acquisition (download from central, project/organization repository, local cache) as needed. In a Python with pip pipeline, this stage will mean the execution of `pip install` command, and similarly in a JavaScript with npm pipeline, `npm install` command.
+- **Environment preparation**: This stage is used to get and configure all needed dependencies. Typically in a Java with Maven or Gradle pipeline, it is skipped as Maven and Gradle handle dependency resolution and acquisition (download from central, project/organization repository, local cache) as needed. In a Python with `pip` pipeline, this stage will mean the execution of `pip install` command, and similarly in a JavaScript with `npm` pipeline, `npm install` command.
 - **Compilation**: This stage is used to transform source code to binaries, or in general to transform source code into the final executable form, including transpilation, uglyfication or minification. For interpreted languages, whenever possible this stage should also include checking for syntax errors.
 - **Unit tests**: This stage is used to execute unit tests (understood as tests which do not need the application to be installed or deployed, like unit-integration tests). Along with test execution, the stage should also gather code coverage metrics.
 - **Mutation tests**: This stage is used to run mutation testing to measure how thorough (and hence useful) automated unit tests are.
@@ -271,61 +268,158 @@ The stages that are proposed as a best practice, are the following:
 
 Once the pipeline to be created is known, it is the time of putting together all the pieces and commands needed to execute every activity.
 
-### The pipeline code 1: Configuring the build execution environment
+### 3.1. The pipeline code part 1: Configure the build execution environment
 
-First, the pipeline must declare the agent to be used for the build execution, and the build properties that will be leveraged later during stage definition, to make stages reusable for every microservice in the system. In this case, the JDK 18 standard image from Eclipse Temurin project is used to run the build:
+First, the pipeline must declare the agent to be used for the build execution, and the build properties that will be leveraged later during each stage definition. This is a good practice to have highly standardized pipelines that can be easily reused across components of the same archetype (e.g., Java + Maven + Spring Boot).
+
+For this pipeline, we will need three containers:
+
+- **Eclipse Temurin JDK 20 image**: Includes the JVM runtime.
+- **Podman image**: Podman will be used to build and publish container images.
+- **Kubectl CLI image**: The CLI is needed to run the ephemeral test environment.
+
+Additionally, we will configure a volume for the Maven cache (to speed up builds). Please note that both Podman and Kubectl images require elevated privileges to run.
+
+A couple of Groovy functions are also added to improve readability of the environment variable definition section. Those functions will be placed after the pipeline block.
 
 ```groovy
-#!groovy
-
 pipeline {
     agent {
-        docker {
-            image 'eclipse-temurin:17.0.3_7-jdk'
-            args '--network ci'
+        kubernetes {
+            defaultContainer 'jdk'
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: jdk
+      image: docker.io/eclipse-temurin:20.0.1_9-jdk
+      command:
+        - cat
+      tty: true
+      volumeMounts:
+        - name: m2-cache
+          mountPath: /root/.m2
+    - name: podman
+      image: quay.io/containers/podman:v4.5.1
+      command:
+        - cat
+      tty: true
+      securityContext:
+        runAsUser: 0
+        privileged: true
+    - name: kubectl
+      image: docker.io/bitnami/kubectl:1.27.3
+      command:
+        - cat
+      tty: true
+      securityContext:
+        runAsUser: 0
+        privileged: true
+  volumes:
+    - name: m2-cache
+      hostPath:
+        path: /data/m2-cache
+        type: DirectoryOrCreate
+'''
         }
     }
 
     environment {
-        ORG_NAME = 'deors'
-        APP_NAME = 'workshop-pipelines'
-        APP_CONTEXT_ROOT = '/'
+        APP_NAME = getPomArtifactId()
+        APP_VERSION = getPomVersionNoQualifier()
+        APP_CONTEXT_ROOT = '/' // it should be '/' or '<some-context>/'
         APP_LISTENING_PORT = '8080'
-        TEST_CONTAINER_NAME = "ci-${APP_NAME}-${BUILD_NUMBER}"
-        DOCKER_HUB = credentials("${ORG_NAME}-docker-hub")
+        APP_JACOCO_PORT = '6300'
+        CONTAINER_REGISTRY_URL = 'docker.io'
+        IMAGE_ORG = '<YOUR_ORG_NAME>' // change it to your own organization at Docker.io!
+        IMAGE_NAME = "$IMAGE_ORG/$APP_NAME"
+        IMAGE_SNAPSHOT = "$IMAGE_NAME:$APP_VERSION-snapshot-$BUILD_NUMBER" // tag for snapshot version
+        IMAGE_SNAPSHOT_LATEST = "$IMAGE_NAME:latest-snapshot" // tag for latest snapshot version
+        IMAGE_GA = "$IMAGE_NAME:$APP_VERSION" // tag for GA version
+        IMAGE_GA_LATEST = "$IMAGE_NAME:latest" // tag for latest GA version
+        EPHTEST_CONTAINER_NAME = "ephtest-$APP_NAME-snapshot-$BUILD_NUMBER"
+        EPHTEST_BASE_URL = "http://$EPHTEST_CONTAINER_NAME:$APP_LISTENING_PORT".concat("/$APP_CONTEXT_ROOT".replace('//', '/'))
+
+        // credentials
+        KUBERNETES_CLUSTER_CRED_ID = 'k3s-lima-vm-kubeconfig'
+        CONTAINER_REGISTRY_CRED = credentials("docker-hub-$IMAGE_ORG")
     }
     ...
 }
+
+def getPomVersion() {
+    return readMavenPom().version
+}
+
+def getPomVersionNoQualifier() {
+    return readMavenPom().version.split('-')[0]
+}
+
+def getPomArtifactId() {
+    return readMavenPom().artifactId
+}
 ```
 
-The network used to create the builder container should be the same where the test container is launched, to ensure that integration and performance tests, that are executed from the builder container, have connectivity with the application under test. That network must exist in the Docker machine or Docker Swarm cluster before the builds are launched.
+As explained above, although not mandatory many of these environment variables are useful as they allows for the pipeline to be easily reusable across projects. Everything that is project-dependant is configured as a variable, and extracted from sources (e.g., the POM file) whenever possible.
 
-The property `DOCKER_HUB` will hold the value of the credentials needed to push images to Docker Hub (or to any other Docker registry). The credentials are stored in Jenkins credential manager, and injected into the pipeline with the `credentials` function. This is a very elegant and clean way to inject credentials as well as any other secret, without hard-coding them (and catastrophically storing them in version control).
+As can be seen above, all secrets are injected from the Jenkins credentials manager. It is generally advisable to use an external secret management tool as Jenkins own manager is not the most secure. However it is good enough for now, and promotes the best practice to never, ever, store any secret or sensitive information in the pipeline, which is expected to be in version control.
 
-As the build is currently configured, it will run completely clean every time, including the acquisition of dependencies by Maven. In those cases in which it is not advisable to download all dependencies in every build, for example because build execution time is more critical than ensuring that dependencies remain accessible, builds can be accelerated by caching dependencies (the local Maven repository) in a volume:
+Let me emphasize that: never, **never**, hard-code secrets or sensitive information in the pipeline code (and catastrophically store it in version control).
 
-```groovy
-    ...
-    agent {
-        docker {
-            image 'eclipse-temurin:17.0.3_7-jdk'
-            args '--network ci --mount type=volume,source=ci-maven-home,target=/root/.m2'
-        }
-    }
-    ...
-```
-
-### The pipeline code 2: Compilation, unit tests, mutation tests and packaging
-
-The first four stages will take care of compilation, unit tests, muration tests and packaging tasks:
+To finish with the environment preparation, let's add the first stage to the pipeline:
 
 ```groovy
     ...
     stages {
+        stage('Prepare environment') {
+            steps {
+                echo '-=- prepare environment -=-'
+                echo "APP_NAME: ${APP_NAME}\nAPP_VERSION: ${APP_VERSION}"
+                echo "the name for the epheremeral test container to be created is: $EPHTEST_CONTAINER_NAME"
+                echo "the base URL for the epheremeral test container is: $EPHTEST_BASE_URL"
+                sh 'java -version'
+                sh './mvnw --version'
+                container('podman') {
+                    sh 'podman --version'
+                    sh "podman login $CONTAINER_REGISTRY_URL -u $CONTAINER_REGISTRY_CRED_USR -p $CONTAINER_REGISTRY_CRED_PSW"
+                }
+                container('kubectl') {
+                    withKubeConfig([credentialsId: "$KUBERNETES_CLUSTER_CRED_ID"]) {
+                        sh 'kubectl version'
+                    }
+                }
+                script {
+                    qualityGates = readYaml file: 'quality-gates.yaml'
+                }
+            }
+        }
+        ...
+    }
+    ...
+```
+
+This stage will do a few interesting things:
+
+- Download Maven through the Maven wrapper which is included within the repository.
+- Verify that Podman can login to the container registry platform.
+- Verify that Kubectl can connect successfully with the K3s cluster in Rancher Desktop.
+- Read quality gate information from the `quality-gates.yaml` YAML file, available in the repository. This is another good practice to decouple quality gate thresholds from the pipeline code.
+
+And now that the environment is ready, let's continue with the CI tasks.
+
+### 3.2. The pipeline code part 2: Compilation, unit tests and mutation tests
+
+The next three stages will take care of compilation, unit tests and mutation tests tasks:
+
+```groovy
+    ...
+    stages {
+        ...
         stage('Compile') {
             steps {
                 echo '-=- compiling project -=-'
-                sh './mvnw clean compile'
+                sh './mvnw compile'
             }
         }
 
@@ -344,7 +438,21 @@ The first four stages will take care of compilation, unit tests, muration tests 
                 sh './mvnw org.pitest:pitest-maven:mutationCoverage'
             }
         }
+        ...
+    }
+    ...
+```
 
+It's worth noting that JaCoCo agent is already configured in `pom.xml` file, and therefore running the `test` goal in Maven will also gather the code coverage metrics.
+
+### 3.3. The pipeline code part 3: Package and publish the application
+
+The next two stages will package the application runtime. First, we will package the Spring Boot app with Maven `package` standard goal. Afterwards, Podman will package the app as a container image with the provided definition in the `Dockerfile` file and publish the image to the container registry, so it can be used afterwards to create the ephemeral test environment:
+
+```groovy
+    ...
+    stages {
+        ...
         stage('Package') {
             steps {
                 echo '-=- packaging project -=-'
@@ -352,32 +460,46 @@ The first four stages will take care of compilation, unit tests, muration tests 
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
+
+        stage('Build & push container image') {
+            steps {
+                echo '-=- build & push container image -=-'
+                container('podman') {
+                    sh "podman build -t $IMAGE_SNAPSHOT ."
+                    sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT"
+                    sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT"
+                    sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT_LATEST"
+                    sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT_LATEST"
+                }
+            }
+        }
         ...
     }
     ...
 ```
 
-It's worth noting that as JaCoCo agent is already configured in `pom.xml` file, running the `test` goal in Maven will also gather the code coverage metrics.
+As can be seen above, the container image is tagged with a snapshot identifier based on the job build number (so it is unique) as well as a second tag identifying the image as the latest snapshot available.
 
-### The pipeline code 3: Build the Docker image and provision the test environment
+### 3.4. The pipeline code part 4: Provision the ephemeral test environment
 
-The next two stages will build the Docker image and provision the test environment by running it:
+The next stage will request K3s to provision the ephemeral test environment, launching the container image and exposing the ports needed to connect test executors with it.
+
+As this is a very simple app, just `kubectl` commands are enough, but take note that for more complex scenarios, other tools such as Helm or Testcontainers are highly recommended (e.g., to deploy not only a Java app but also a database or any other dependency):
 
 ```groovy
     ...
     stages {
         ...
-        stage('Build Docker image') {
+        stage('Run container image') {
             steps {
-                echo '-=- build Docker image -=-'
-                sh './mvnw docker:build'
-            }
-        }
-
-        stage('Run Docker image') {
-            steps {
-                echo '-=- run Docker image -=-'
-                sh "docker run --name ${TEST_CONTAINER_NAME} --detach --rm --network ci --expose ${APP_LISTENING_PORT} --expose 6300 --env JAVA_OPTS='-Dserver.port=${APP_LISTENING_PORT} -Dspring.profiles.active=ci -javaagent:/jacocoagent.jar=output=tcpserver,address=*,port=6300' ${ORG_NAME}/${APP_NAME}:latest"
+                echo '-=- run container image -=-'
+                container('kubectl') {
+                    withKubeConfig([credentialsId: "$KUBERNETES_CLUSTER_CRED_ID"]) {
+                        sh "kubectl run $EPHTEST_CONTAINER_NAME --image=$CONTAINER_REGISTRY_URL/$IMAGE_SNAPSHOT --env=JAVA_OPTS=-javaagent:/jacocoagent.jar=output=tcpserver,address=*,port=$APP_JACOCO_PORT --port=$APP_LISTENING_PORT"
+                        sh "kubectl expose pod $EPHTEST_CONTAINER_NAME --port=$APP_LISTENING_PORT"
+                        sh "kubectl expose pod $EPHTEST_CONTAINER_NAME --port=$APP_JACOCO_PORT --name=$EPHTEST_CONTAINER_NAME-jacoco"
+                    }
+                }
             }
         }
         ...
@@ -385,21 +507,17 @@ The next two stages will build the Docker image and provision the test environme
     ...
 ```
 
-When the test environment is created, there are some important notes to take into consideration.
+It is worth noting that not only the container image is given a tag unique to this build, but also the test container name includes the build number. This allows for parallel execution of builds, i.e. when rapid feedback is required for every commit and/or we have multiple developers in our team.
 
-The network used to run the container, as explained before, should be the same in which the build is running. This way, there is network visibility and the network DNS can be use to resolve easily where the test container is running.
+The port in which the application listens is exposed to be accessible by test executors, but is not published and routed outside the cluster network. Therefore, this is not a test environment that is intended to be used outside of the CI build, such a staging environment.
 
-The test container name is set to include the build number, which allows for parallel execution of builds, i.e. when rapid feedback is required for every commit.
+However, when a staging environment is needed (or any other kind of non-productive environment), it can be easily provisioned with the same image and environment-specific configuration (as needed), effectively providing with production-like environment provisioning capabilities.
 
-The port in which the application listens is configured with a property which is used consistently to ensure that connectivity works fine, i.e. the server starts in a known port, that port is exposed (but not needed to be published outside the network), and later, the test executors point to that very same port.
+The container image already contains the JaCoCo agent runtime, and the application runs with the JaCoCo agent activated and listening in port 6300. Later, during integration tests, the build will connect to that port to dump code coverage information from the ephemeral environment.
 
-The application runs with a given Spring profile activated. This is used to inject test environment specific configuration properties, for example settings that would be pulled from configservice which is not available during this test phase.
+### 3.5. The pipeline code part 5: Run integration and performance tests
 
-The application runs with JaCoCo agent activated and listening in port 6300. Later during integration tests, the build will connect to that port to dump code coverage information from the server.
-
-### The pipeline code 4: Running integration and performance tests
-
-The following two steps will execute the integration and performance tests, once the application is deployed and available in the test environment:
+The following two stages will execute the integration and performance tests, once the application is deployed and available in the ephemeral test environment:
 
 ```groovy
     ...
@@ -408,9 +526,9 @@ The following two steps will execute the integration and performance tests, once
         stage('Integration tests') {
             steps {
                 echo '-=- execute integration tests -=-'
-                sh "curl --retry 5 --retry-connrefused --connect-timeout 5 --max-time 5 http://${TEST_CONTAINER_NAME}:${APP_LISTENING_PORT}/${APP_CONTEXT_ROOT}/actuator/health"
-                sh "./mvnw failsafe:integration-test failsafe:verify -DargLine=\"-Dtest.target.server.url=http://${TEST_CONTAINER_NAME}:${APP_LISTENING_PORT}/${APP_CONTEXT_ROOT}\""
-                sh "java -jar target/dependency/jacococli.jar dump --address ${TEST_CONTAINER_NAME} --port 6300 --destfile target/jacoco-it.exec"
+                sh "curl --retry 10 --retry-connrefused --connect-timeout 5 --max-time 5 ${EPHTEST_BASE_URL}actuator/health"
+                sh "./mvnw failsafe:integration-test failsafe:verify -DargLine=-Dtest.selenium.hub.url=$SELENIUM_URL -Dtest.target.server.url=$EPHTEST_BASE_URL"
+                sh "java -jar target/dependency/jacococli.jar dump --address $EPHTEST_CONTAINER_NAME-jacoco --port $APP_JACOCO_PORT --destfile target/jacoco-it.exec"
                 sh 'mkdir target/site/jacoco-it'
                 sh 'java -jar target/dependency/jacococli.jar report target/jacoco-it.exec --classfiles target/classes --xml target/site/jacoco-it/jacoco.xml'
                 junit 'target/failsafe-reports/*.xml'
@@ -421,7 +539,8 @@ The following two steps will execute the integration and performance tests, once
         stage('Performance tests') {
             steps {
                 echo '-=- execute performance tests -=-'
-                sh "./mvnw jmeter:configure@configuration jmeter:jmeter jmeter:results -Djmeter.target.host=${TEST_CONTAINER_NAME} -Djmeter.target.port=${APP_LISTENING_PORT} -Djmeter.target.root=${APP_CONTEXT_ROOT}"
+                sh "curl --retry 10 --retry-connrefused --connect-timeout 5 --max-time 5 ${EPHTEST_BASE_URL}actuator/health"
+                sh "./mvnw jmeter:configure@configuration jmeter:jmeter jmeter:results -Djmeter.target.host=$EPHTEST_CONTAINER_NAME -Djmeter.target.port=$APP_LISTENING_PORT -Djmeter.target.root=$APP_CONTEXT_ROOT"
                 perfReport sourceDataFiles: 'target/jmeter/results/*.csv'
             }
         }
@@ -432,42 +551,159 @@ The following two steps will execute the integration and performance tests, once
 
 There a few outstanding pieces that are worth noting.
 
-Before the integration tests are launched, it is good idea to ensure that the application is fully initialised and responding. The Docker run command will return once the container is up, but this does not mean that the application is up and running and able to respond to requests. With a simple `curl` command it is possible to configure the pipeline to wait for the application to be available.
+Before the integration tests are launched, it is good idea to ensure that the application is fully initialised and responding. The `kubectl run` command will return once the pod is scheduled, but this does not mean that the application is up and running and able to respond to requests. With a simple `curl` command it is possible to configure the pipeline to wait for the application to be available.
 
-Integration and performance tests are executing by passing as a parameter the root URL where the application is to be found, including the test container name that will be resolved thanks to the network DNS, and the configured port.
+Integration and performance tests are executing by passing as a parameter the root URL where the application is to be found, including the test container name that will be resolved thanks to the internal cluster DNS, and the configured port.
 
-Code coverage information is being gathered in the test container. Therefore, to have it available for the quality gate and report publishing, the JaCoCo CLI `dump` command is executed. The JaCoCo CLI is available in the `target/dependency` folder as it was configured before with the help of the Maven dependency plugin.
+Code coverage information is being gathered in the test container. Therefore, to have it available for the quality gate and report publishing, the JaCoCo CLI `dump` command is executed. The JaCoCo CLI is available in the `target/dependency` folder as it was included there with the container image and the Maven dependency plugin.
 
-For performance tests, it is possible to include a quality gate in the `perfReport` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable. As an example, this is a quality gate flagging the build as unstable in case of at least one failed request or if average response time exceeds 100 ms, and failing the build if there are 5% or more of failing requests.
+For performance tests, it is possible to include a quality gate in the `perfReport` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable. As explained before, the quality gate thresholds are not hard-coded, but included in the `quality-gates.yaml` file in the repository.
 
-```groovy
-        ...
-        stage('Performance tests') {
-            steps {
-                echo '-=- execute performance tests -=-'
-                sh "./mvnw jmeter:configure@configuration jmeter:jmeter jmeter:results -Djmeter.target.host=${TEST_CONTAINER_NAME} -Djmeter.target.port=${APP_LISTENING_PORT} -Djmeter.target.root=${APP_CONTEXT_ROOT}"
-                perfReport sourceDataFiles: 'target/jmeter/results/*.csv', errorUnstableThreshold: 0, errorFailedThreshold: 5, errorUnstableResponseTimeThreshold: 'default.jtl:100'
-            }
-        }
-        ...
-```
-
-### The pipeline code 5: Dependency vulnerability scan, code inspection and quality gate
-
-The next two stages will check dependencies for known security vulnerabilities, and execute code inspection with SonarQube (and tools enabled through plugins), including any compound quality gate defined in SonarQube for the technology or project:
+To enable the quality gates, use this alternate version of the call to `perfReport`:
 
 ```groovy
     ...
     stages {
         ...
-        stage('Dependency vulnerability scan') {
+        stage('Performance tests') {
             steps {
-                echo '-=- run dependency vulnerability scan -=-'
-                sh './mvnw dependency-check:check'
-                dependencyCheckPublisher
+                ...
+                perfReport(
+                    sourceDataFiles: 'target/jmeter/results/*.csv',
+                    errorUnstableThreshold: qualityGates.performance.throughput.error.unstable,
+                    errorFailedThreshold: qualityGates.performance.throughput.error.failed,
+                    errorUnstableResponseTimeThreshold: qualityGates.performance.throughput.response.unstable)
             }
         }
+        ...
+    }
+    ...
+```
 
+### 3.6. The pipeline code part 6: Promote the container image
+
+At this point of the pipeline, the application has been built, packaged, deployed and tested in different ways. If tests have passed and quality gates are ok, this means that the application container image is ready to be promoted. Typically, a release candidate (RC) or generally available (GA) status and flag is used.
+
+Thos flags are used to differentiate a development build (or snapshot), from a validated, production-ready build (and thus, potentially shippable), or something intermediate that may still require further validation by the business. Depending on how the release process is shaped, and how confident the team is with the automated test suite, the release process may require of user acceptance tests or other kinds of decision making (including the product owner/manager approving the release).
+
+In this case, the container image will be tagged as 'GA' and artifact version number, as well as with a second tag identifying the image as the latest 'GA' available.
+
+```groovy
+    ...
+    stages {
+        ...
+        stage('Promote container image') {
+            steps {
+                echo '-=- promote container image -=-'
+                container('podman') {
+                    // when using latest or a non-snapshot tag to deploy GA version
+                    // this tag push should trigger the change in staging/production environment
+                    sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_GA"
+                    sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_GA"
+                    sh "podman tag $IMAGE_SNAPSHOT $CONTAINER_REGISTRY_URL/$IMAGE_GA_LATEST"
+                    sh "podman push $CONTAINER_REGISTRY_URL/$IMAGE_GA_LATEST"
+                }
+            }
+        }
+        ...
+    }
+    ...
+```
+
+### 3.7. The pipeline code part 7: Clean up resources
+
+The final piece to set is the `post` block to clean up any resources. In this case, the ephemeral test environment should be removed:
+
+```groovy
+pipeline {
+    ...
+    post {
+        always {
+            echo '-=- stop test container and remove deployment -=-'
+            container('kubectl') {
+                withKubeConfig([credentialsId: "$KUBERNETES_CLUSTER_CRED_ID"]) {
+                    sh "kubectl delete pod $EPHTEST_CONTAINER_NAME"
+                    sh "kubectl delete service $EPHTEST_CONTAINER_NAME"
+                    sh "kubectl delete service $EPHTEST_CONTAINER_NAME-jacoco"
+                }
+            }
+        }
+    }
+}
+```
+
+### 3.8. Create the Jenkins job and run the pipeline
+
+Once all the pieces are together it's the time to add the job to Jenkins and execute it.
+
+From Jenkins UI home, click on the `New Item` left menu option. Put a meaningful name to the job (e.g., `workshop-pipelines-<YOUR_NAME_OR_ALIAS>`) and select the `Multibranch Pipeline` job type. Click on the `Ok` button at the bottom.
+
+In the job configuration page, look for the `Branch Sources` section, click on the `Add source` button and select `GitHub` or any other available version control system.
+
+If using a public repository, no credentials will be required. Otherwise, configure the credentials, such as personal access tokens, and use them to access the repository.
+
+Paste the repository HTTPS URL (e.g., `https://github.com/deors/workshop-pipelines`) and use the `Validate` button to ensure that everything is ok.
+
+Click on the `Save` button at the bottom and wait a few seconds for the scan to finish. If everything was configured right, the branches with *Jenkinsfiles* will be found and available to run builds.
+
+Go back to the job main page by clicking in the breadcrumbs at the top and click on the *green triangle* build button to the right of the corresponding branch, and after a few minutes...
+
+Green balls!
+
+## Part 4. Add code inspection and static vulnerability analysis
+
+To add these capabilities to the pipeline we will use SonarQube and OWASP Dependency Check.
+
+### 4.1. Run SonarQube
+
+To run SonarQube, let's use the official image, adding three persistent volumes for SonarQube data, extensions, and search data, a PostgreSQL database, and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
+
+    kubectl apply -f src/etc/ci-sonarqube.yaml
+
+To verify that the whole deployment was right, use the following command:
+
+    kubectl get all,ingress,pv,pvc
+
+You should see that the additional pod, service, deployment, replica set, ingress, persistent volume, and persistent volume claim objects are created in the cluster.
+
+### 4.2. Configure SonarQube
+
+Thanks to Traefik, we can access the SonarQube UI through `http://localhost/sonarqube`. Alternatively, it is also possible to configure port forwarding in Rancher Desktop.
+
+To integrate SonarQube with Jenkins, the Jenkins plugin must be configured to reach out to the right SonarQube instance when required.
+
+Before configuring that integration, a SonarQube API token must be created. That token is required to authenticate requests coming from Jenkins.
+
+As this is the first run, login to SonarQube using the default credentials: both username and password are simply `admin`. Next, configure a good administrator password.
+
+Click on `Administration` on the top menu and afterwards on `Security` and `Users` in the horizonal menu below. In the `Administrator` user configuration row, there is a menu icon to the right with the label `Update Tokens`. Click on it, and in the pop-up dialog, in the text box below `Generate Tokens` enter `ci-sonarqube-token` (or any other meaningful name), set it to expire in a reasonable time (30 days is fine, but remember that it will expire and it will need to be generated again after that time), and press the `Generate` button. The API token will be shown below. Take note of it, as this is the last time it will be shown in the UI.
+
+Before leaving SonarQube, let's configure the webhook that will be called by SonarQube to let Jenkins know that a requested analysis has finished.
+
+Click on `Administration` on the top menu and afterwards on `Configuration`and `Webhooks` in the horizontal menu below. Click on the `Create` button. Enter `ci-jenkins-webhook` for the webhook name, and for the URL, the Jenkins home URL appending `/sonarqube-webhook`. In our setup, the value should be `http://ci-jenkins:9090/jenkins/sonarqube-webhook`. Click on the `Create` button and configuration on the SonarQube side is ready.
+
+### 4.3. Configure Jenkins integration with SonarQube
+
+Go back to Jenkins. Click on the `Manage Jenkins` left menu option and next click on the `Credentials` center menu option. In the credentials store table, click on the link labeled as `(global)` for the Jenkins global domain.
+
+Next, click on `Add Credentials` in the top menu. In the credential kind select `Secret text`. The secret value is the API token just generated. The secret id can be `ci-sonarqube-token` (or another good name of your choice). Press `Create` when finished to save the credentials in the store.
+
+Next, let's configure the SonarQube server integration. Go back to the dashboard, click on the `Manage Jenkins` left menu option and next click on the `System` center menu option. Scroll down until the section `SonarQube Servers` is visible. Click on the checkbox to allow injection of server configuration.
+
+Next, let's add the SonarQube instance name and URL. To ensure that the right server is used by the pipeline use `ci-sonarqube` for the instance name. If the selected name is different, it should match the name referenced in the pipeline code later. For the server URL, use the SonarQube home URL. In our setup, the value should be `http://ci-sonarqube:9000/sonarqube`. Finally, for the server authentication token, use the API token stored in the `ci-sonarqube-token` credential created before. Click on the `Save` button and configuration on the Jenkins side is ready.
+
+### 4.4. The pipeline code part 8: Code inspection and quality gate
+
+Now that Jenkins and SonarQube are both configured, let's add a stage to the pipeline to execute code inspection with SonarQube. SonarQube analysis includes static security vulnerability analysis, as well as additional analysis provided by third-party tools (enabled through plugins) such as PMD or SpotBugs. Additionally, any compound quality gate defined in SonarQube for the technology or project will also be checked and will cause the build to stop if not passed.
+
+Where should this stage be placed? This is a very good question. Some people recommends to run the code analysis after the unit tests and before packaging the application. This is a good general approach but it has a disadvantage: quality gates cannot use integration test results (e.g., the code coverage gathered after Selenium tests are executed).
+
+Considering that, I recommend to put this stage after integration & performance tests, and before the container image is promoted to 'GA' status:
+
+```groovy
+    ...
+    stages {
+        ...
         stage('Code inspection & quality gate') {
             steps {
                 echo '-=- run code inspection & check quality gate -=-'
@@ -484,19 +720,55 @@ The next two stages will check dependencies for known security vulnerabilities, 
     ...
 ```
 
-For dependency check, it is possible to include a quality gate in the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging a build as unstable.
+It's worth noting that the code analysis and calculation of the quality gate by SonarQube is an asynchronous process. Depending on SonarQube server load, it might take some time for results to be available, and as a design decision, the `sonar:sonar` goal will not wait, blocking the build, until then. This has the beneficial side effect that the Jenkins executor is not blocked and other builds might be built in the meantime, maximizing the utilization of Jenkins build farm resources.
 
-As of the time of this update, Spring Boot 2.7.0 has 7 known vulnerabilities without a patch. The quality gate shown below will accept those vulnerabilities (3 critical, 4 medium severity) and will fail in case additional vulnerabilities are detected.
+The pipeline code therefore sets a wait time for SonarQube to 'call back home' using the configured webhook, and unpause to continue evaluating the quality gate results, as well as any further stages pending in the pipeline.
+
+The default behavior for SonarQube quality gate, as coded in the `waitForQualityGate` function, is to break the build in case any of the thresholds defined in the gate is not achieved.
+
+### 4.5. The pipeline code part 9: Software composition analysis
+
+Besides the static vulnerability analysis provided by SonarQube it is strongly recommended to check dependencies for known security vulnerabilities. Our code may be 100% clean of known vulnerabilities and be critically exposed to exploits due to the usage of libraries with unpatched vulnerabilities.
+
+A popular open-source tool for software composition analysis is OWASP Dependency Check. Let's add a stage before packaging the application to run the scan and publish results in Jenkins:
+
+```groovy
+    ...
+    stages {
+        ...
+        stage('Software composition analysis') {
+            steps {
+                echo '-=- run software composition analysis -=-'
+                sh './mvnw dependency-check:check'
+                dependencyCheckPublisher
+            }
+        }
+        ...
+    }
+    ...
+```
+
+OWASP Dependency Check also allows to set up a quality gate in the call to the `dependencyCheckPublisher` function, causing the build to fail if any of the thresholds are not passed, as well as flagging the build as unstable.
+
+As of the time of this update, Spring Boot 2.7.12 has 10 known vulnerabilities without a patch. The quality gate shown below will accept those vulnerabilities (2 critical, 1 high, 7 medium severity) and will fail in the case that additional vulnerabilities are detected.
 
 However, the publisher function will not break the build immediately when found vulnerabilities exceed the configured threshold. To close that gap, a simple script can be added to the scan step:
 
 ```groovy
+    ...
+    stages {
         ...
-        stage('Dependency vulnerability scan') {
+        stage('Software composition analysis') {
             steps {
-                echo '-=- run dependency vulnerability scan -=-'
+                echo '-=- run software composition analysis -=-'
                 sh './mvnw dependency-check:check'
-                dependencyCheckPublisher failedTotalCritical: '4', unstableTotalCritical: '4', failedTotalHigh: '0', unstableTotalHigh: '0', failedTotalMedium: '5', unstableTotalMedium: '5'
+                dependencyCheckPublisher(
+                    failedTotalCritical: qualityGates.security.dependencies.critical.failed,
+                    unstableTotalCritical: qualityGates.security.dependencies.critical.unstable,
+                    failedTotalHigh: qualityGates.security.dependencies.high.failed,
+                    unstableTotalHigh: qualityGates.security.dependencies.high.unstable,
+                    failedTotalMedium: qualityGates.security.dependencies.medium.failed,
+                    unstableTotalMedium: qualityGates.security.dependencies.medium.unstable)
                 script {
                     if (currentBuild.result == 'FAILURE') {
                         error('Dependency vulnerabilities exceed the configured threshold')
@@ -505,122 +777,70 @@ However, the publisher function will not break the build immediately when found 
             }
         }
         ...
+    }
+    ...
 ```
 
-It's worth noting that the code analysis and calculation of the quality gate by SonarQube is an asynchronous process. Depending on SonarQube server load, it might take some time for results to be available, and as a design decision, the `sonar:sonar` goal will not wait, blocking the build, until then. This has the beneficial side effect that the Jenkins executor is not blocked and other builds might be built in the meantime, maximizing the utilization of Jenkins build farm resources.
+## Part 5. Add web application performance analysis
 
-The default behavior for SonarQube quality gate, as coded in the `waitForQualityGate` function, is to break the build in case any of the thresholds defined in the gate is not achieved.
+To add this capability to the pipeline we will use Lighthouse.
 
-### The pipeline code 6: Pushing the Docker image
+### 5.1. Run Lighthouse
 
-At this point of the pipeline, if all quality gates have passed, the produced image can be considered as a stable, releasable version, and hence might be published to a shared Docker registry, like Docker Hub, as the final stage of the pipeline:
+To run Lighthouse, let's use the official image, adding a persistent volume for Lighthouse data, and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
+
+    kubectl apply -f src/etc/ci-lighthouse.yaml
+
+To verify that the whole deployment was right, use the following command:
+
+    kubectl get all,ingress,pv,pvc
+
+You should see that the additional pod, service, deployment, replica set, ingress, persistent volume, and persistent volume claim objects are created in the cluster.
+
+IMPORTANT NOTE: At the time of this update, with Lighthouse 0.12 the routing is not working because Lighthouse does not support to run behind a proxy in non-root paths as it has absolute URLs. Due to that, enable port forwarding in Rancher Desktop UI to access Lighthouse UI and explore analysis results.
+
+### 5.2. Configure Lighthouse
+
+lorem ipsum
+
+### 5.3. Configure Jenkins integration with Lighthouse
+
+lorem ipsum
+
+### 5.4. The pipeline code part 10: Web application performance analysis
+
+lorem ipsum
 
 ```groovy
     ...
     stages {
         ...
-        stage('Push Docker image') {
+        stage('Web page performance analysis') {
             steps {
-                echo '-=- push Docker image -=-'
-                sh './mvnw docker:push'
+                echo '-=- execute web page performance analysis -=-'
+                container('lhci') {
+                    sh """
+                      cd $WORKSPACE
+                      git config --global --add safe.directory $WORKSPACE
+                      export LHCI_BUILD_CONTEXT__CURRENT_BRANCH=$GIT_BRANCH
+                      lhci collect --collect.settings.chromeFlags='--no-sandbox' --url ${EPHTEST_BASE_URL}hello
+                      lhci upload --token $LIGHTHOUSE_TOKEN --serverBaseUrl $LIGHTHOUSE_URL --ignoreDuplicateBuildFailure
+                    """
+                }
             }
         }
+        ...
     }
     ...
 ```
 
-For this command to work, the right credentials must be set. The Spotify Docker plugin that is being used, configures registry credentials in various ways but particularly one is perfect for pipeline usage, as it does not require any pre-configuration in the builder container: credential injection through Maven settings.
+lorem ipsum
 
-So far, the following configuration pieces are set: Spotify plugin sets the server id with the following configuration setting `<serverId>docker-hub</serverId>`, and the pipeline gets the credentials injected as the `DOCKER_HUB` property.
+--- END OF WORKSHOP ---
 
-Actually, unseen by the eye, other two properties are created by Jenkins `credentials` function: `DOCKER_HUB_USR` and `DOCKER_HUB_PSW`.
+## APPENDIX A. Explaining stuff in Maven's pom.xml
 
-To finally connect all the dots together, it is needed that Maven processes, specifically this one, has special settings to inject the credential so it's available to Spotify plugin.
-
-The easiest way to do that, is to create a `.mvn/maven.config` file with the reference to the settings file to be used, and the Maven wrapper, the `mvnw` command that is being used along the pipeline, will pick those settings automatically.
-
-These are the contents for the `.mvn/maven.config` file:
-
-    -s .mvn/settings.xml
-
-And these are the contents for the `.mvn/settings.xml` file which is being referenced:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
-
-    <interactiveMode>true</interactiveMode>
-    <offline>false</offline>
-    <pluginGroups/>
-    <proxies/>
-    <servers>
-        <server>
-            <id>docker-hub</id>
-            <username>${env.DOCKER_HUB_USR}</username>
-            <password>${env.DOCKER_HUB_PSW}</password>
-        </server>
-    </servers>
-    <mirrors/>
-    <profiles/>
-
-</settings>
-```
-
-### The pipeline code 7: Cleaning up resources
-
-The final piece to set is the `post` block to clean up any resources. In this case, the test container should be removed:
-
-```groovy
-#!groovy
-
-pipeline {
-    ...
-    post {
-        always {
-            echo '-=- remove deployment -=-'
-            sh "docker stop ${TEST_CONTAINER_NAME}"
-        }
-    }
-}
-```
-
-## Running the pipeline
-
-Once all the pieces are together, pipelines configured for every service in our system, it's the time to add the job to Jenkins and execute it.
-
-Green balls!
-
-## Adding SonarQube for code inspection and static vulnerability analysis
-
-### SonarQube configuration
-
-To integrate SonarQube with Jenkins, the Jenkins plugin must be configured to reach out to the right SonarQube instance when required.
-
-Before configuring that integration, a SonarQube API token must be created. That token is required to authenticate requests coming from Jenkins.
-
-Login to SonarQube using the default credentials: both username and password are simply `admin`. On first run, a tutorial wizard will show but it can be skipped for now.
-
-Click on `Administration` on the top menu and afterwards on `Security` and `Users` in the horizonal menu below. In the `Administrator` user configuration row, there is a menu icon to the right with the label `Update Tokens`. Click on it, and in the pop-up dialog, in the text box below `Generate Tokens` enter `ci-sonarqube` (or any other meaningful name) and press the `Generate` button. The API token will be shown below. Take note of it, as this is the last time it will be shown in the UI.
-
-Before leaving SonarQube, let's configure the webhook that will be leveraged by SonarQube to let Jenkins know that a requested analysis has finished.
-
-Click on `Administration` on the top menu and afterwards on `Configuration`and `Webhooks` in the horizontal menu below. Click the `Create` button. Enter `ci-jenkins` for the webhook name, and for the URL, the Jenkins home URL appending `/sonarqube-webhook`. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9080/jenkins/sonarqube-webhook`. Click the `Create` button and configuration on the SonarQube side is ready.
-
-Login to Jenkins with the previously configured administrator credentials.
-
-Click on `Manage Jenkins` menu option and next click on `Manage Credentials` menu option. In the credentials store table, click on the link labeled as `(global)` for the Jenkins global domain.
-
-Next, click on `Add Credentials` in the left menu. In the credential kind select `Secret text`. The secret value is the API token just generated. The secret id can be `ci-sonarqube` as well. Press `Create` when finished to save the credentials in the store.
-
-Next, let's configure the SonarQube server integration. Go back to the dashboard, click on `Manage Jenkins` menu option and next click on `Configure System` menu option. Scroll down until the section `SonarQube Servers` is visible. Click the checkbox to allow injection of server configuration.
-
-Next, let's add the SonarQube instance name and URL. To ensure that the right server is used by the pipeline use `ci-sonarqube` for the instance name. If the selected name is different, it should match the name referenced in the pipeline later. For the server URL, use the SonarQube home URL. For example, for a server running on AWS EC2, the URL would look like: `http://ec2-xxx-xxx-xxx-xxx.eu-west-1.compute.amazonaws.com:9000/sonarqube`. Finally, for the server authentication token, use the API token stored in the `ci-sonarqube` credential created before. Click the `Save` button and configuration on the Jenkins side is ready.
-
-## APPENDIX. Explaining stuff in Maven's pom.xml
-
-### Adding JaCoCo agent to gather code coverage metrics during tests
+### A.1. Adding JaCoCo agent to gather code coverage metrics during tests
 
 One of the actions to be done along the pipeline, is to gather code coverage metrics when unit tests and integration tests are executed. To do that, there are a few actions needed in preparation for the task.
 
@@ -719,7 +939,7 @@ And finally, the JaCoCo agent needs to be copied into the Docker image. Edit the
     ...
 ```
 
-### Configuring Failsafe for integration test execution
+### A.2. Configuring Failsafe for integration test execution
 
 Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twin for integration tests, is disabled by default. To enable Failsafe, its targets must be called explicitely or alternatively may be binded to the corresponding lifecycle goals. To better control its execution in the pipeline it is preferred to disable Failsafe by default:
 
@@ -746,7 +966,7 @@ Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twi
 
 In addition to the optional automatic activation of Failsafe, the configuration includes the execution filter: the pattern to recognize which test classes are integration tests vs. unit tests.
 
-### Adding performance tests with Apache JMeter
+### A.3. Adding performance tests with Apache JMeter
 
 The next addition to the project configuration is the addition of performance tests with Apache JMeter.
 
@@ -776,7 +996,7 @@ Besides the addition of the plugin, and optionally enabling the automatic execut
     </build>
 ```
 
-### Configuring mutation testing
+### A.4. Configuring mutation testing
 
 The next step is to configure mutation testing with Pitest.
 
@@ -818,7 +1038,7 @@ It is also needed to enable JUnit 5 support in Pitest explicitly by adding the c
 
 Due to how Pitest plugin works, it will fail when there are no mutable tests i.e. no strict unit tests. Considering this, the pipelines corresponding to services without mutable tests should skip the execution of Pitest.
 
-### Configuring dependency vulnerability scans with OWASP
+### A.5. Configuring dependency vulnerability scans with OWASP
 
 OWASP is a global organization focused on secure development practices. OWASP also owns several open source tools, including OWASP Dependency Check. Dependency Check scans dependencies from a project manifest, like the `pom.xml` file, and checks them with the online repository of known vulnerabilities (CVE, maintained by NIST), for every framework artefact, and version.
 
@@ -842,3 +1062,5 @@ Adding support for Dependency Check scans is as simple as adding the correspondi
         ...
     </build>
 ```
+
+--- EOF ---
