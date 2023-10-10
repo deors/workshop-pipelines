@@ -166,6 +166,8 @@ spec:
               value: "sonarqube"
             - name: SONAR_JDBC_PASSWORD
               value: "sonar99sonar"
+            - name: SONAR_WEB_CONTEXT
+              value: "/sonarqube"
           volumeMounts:
             - name: ci-sonarqube-extensions
               mountPath: /opt/sonarqube/extensions
