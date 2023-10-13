@@ -527,7 +527,7 @@ The following two stages will execute the integration and performance tests, onc
             steps {
                 echo '-=- execute integration tests -=-'
                 sh "curl --retry 10 --retry-connrefused --connect-timeout 5 --max-time 5 ${EPHTEST_BASE_URL}actuator/health"
-                sh "./mvnw failsafe:integration-test failsafe:verify -DargLine=-Dtest.selenium.hub.url=$SELENIUM_URL -Dtest.target.server.url=$EPHTEST_BASE_URL"
+                sh "./mvnw failsafe:integration-test failsafe:verify -DargLine=-Dtest.target.server.url=$EPHTEST_BASE_URL"
                 sh "java -jar target/dependency/jacococli.jar dump --address $EPHTEST_CONTAINER_NAME-jacoco --port $APP_JACOCO_PORT --destfile target/jacoco-it.exec"
                 sh 'mkdir target/site/jacoco-it'
                 sh 'java -jar target/dependency/jacococli.jar report target/jacoco-it.exec --classfiles target/classes --xml target/site/jacoco-it/jacoco.xml'
@@ -690,7 +690,7 @@ Next, click on `Add Credentials` in the top menu. In the credential kind select 
 
 Next, let's configure the SonarQube server integration. Go back to the dashboard, click on the `Manage Jenkins` left menu option and next click on the `System` center menu option. Scroll down until the section `SonarQube Servers` is visible. Click on the checkbox to allow injection of server configuration.
 
-Next, let's add the SonarQube instance name and URL. To ensure that the right server is used by the pipeline use `ci-sonarqube` for the instance name. If the selected name is different, it should match the name referenced in the pipeline code later. For the server URL, use the SonarQube home URL. In our setup, the value should be `http://ci-sonarqube:9000/sonarqube`. Finally, for the server authentication token, use the API token stored in the `ci-sonarqube-token` credential created before. Click on the `Save` button and configuration on the Jenkins side is ready.
+Next, let's add the SonarQube instance name and URL. To ensure that the right server is used by the pipeline use `ci-sonarqube` for the instance name. If the selected name is different, it should match the name referenced in the pipeline code later. For the server URL, use the SonarQube home URL. In our setup, the value should be `http://ci-sonarqube:9000/sonarqube` using the internal cluster DNS. Finally, for the server authentication token, use the API token stored in the `ci-sonarqube-token` credential created before. Click on the `Save` button and configuration on the Jenkins side is ready.
 
 ### 4.4. The pipeline code part 8: Code inspection and quality gate
 
@@ -698,7 +698,9 @@ Now that Jenkins and SonarQube are both configured, let's add a stage to the pip
 
 Where should this stage be placed? This is a very good question. Some people recommends to run the code analysis after the unit tests and before packaging the application. This is a good general approach but it has a disadvantage: quality gates cannot use integration test results (e.g., the code coverage gathered after Selenium tests are executed).
 
-Considering that, I recommend to put this stage after integration & performance tests, and before the container image is promoted to 'GA' status:
+Considering that, I recommend to put this stage after integration & performance tests, and before the container image is promoted to 'GA' status.
+
+Take into consideration that the SonarQube instance referred in the call to the function `withSonarQubeEnv` must match the instance configured in Jenkins as explained above.
 
 ```groovy
     ...
@@ -783,11 +785,11 @@ However, the publisher function will not break the build immediately when found 
 
 ## Part 5. Add web application performance analysis
 
-To add this capability to the pipeline we will use Lighthouse.
+To add this capability to the pipeline we will use Lighthouse CI.
 
-### 5.1. Run Lighthouse
+### 5.1. Run Lighthouse CI
 
-To run Lighthouse, let's use the official image, adding a persistent volume for Lighthouse data, and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
+To run Lighthouse CI, let's use the official image, adding a persistent volume for Lighthouse CI ata, and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
 
     kubectl apply -f src/etc/ci-lighthouse.yaml
 
@@ -797,19 +799,83 @@ To verify that the whole deployment was right, use the following command:
 
 You should see that the additional pod, service, deployment, replica set, ingress, persistent volume, and persistent volume claim objects are created in the cluster.
 
-IMPORTANT NOTE: At the time of this update, with Lighthouse 0.12 the routing is not working because Lighthouse does not support to run behind a proxy in non-root paths as it has absolute URLs. Due to that, enable port forwarding in Rancher Desktop UI to access Lighthouse UI and explore analysis results.
+IMPORTANT NOTE: At the time of this update, with Lighthouse CI 0.12.0 the routing is not working because Lighthouse CI server does not support to run behind a proxy in non-root paths as it uses absolute URLs. Due to that, enable port forwarding in Rancher Desktop UI to access Lighthouse CI UI and explore analysis results.
 
-### 5.2. Configure Lighthouse
+### 5.2. Configure Lighthouse CI
 
-lorem ipsum
+Before running an analysis with Lighthouse CI it is required to create a project and obtain a token to integrate the collection tool with the server.
 
-### 5.3. Configure Jenkins integration with Lighthouse
+The simplest way to launch the CLI is directly from a container, by running this command:
 
-lorem ipsum
+    kubectl run lhci --image=patrickhulce/lhci-client:0.12.0 --stdin --tty --rm --command -- lhci wizard
+
+A simple console-based wizard will launch. Select the highlighted option `new-project`, enter the Lighthouse CI server URL as seen from inside the cluster (it should be `http://ci-lighthouse:9001`), enter the name of the project, the Git repository URL, and the name of the main branch.
+
+If you have Node.js installed locally in your workstation you can also install `lhci` and run the wizard locally:
+
+    npm install -g @lhci/cli@0.12.0
+    lchi wizard
+
+In this case, remember to use `localhost` and the port number enabled in port forwarding to connect with Lighthouse CI server.
+
+### 5.3. Configure Jenkins integration with Lighthouse CI
+
+In Jenkins a couple of secrets will be configured, as they are used by the pipeline to get the server URL and project token.
+
+Go to Jenkins credentials page. Click on `Add Credentials` in the top menu. In the credential kind select `Secret text`. The secret value is the server URL, `http://ci-lighthouse:9001` if following this guide. The secret id will be `ci-lighthouse-url` (or another good name of your choice but keep in mind that it should match the secret id used in the pipeline). Press `Create` when finished to save the token in the store.
+
+Repeat for the second secret. The secret value is the analysis token just generated with `lhci wizard`. The secret id will be `ci-lighthouse-token-<<YOUR_PROJECT_NAME>>` (again, remember to match the id if you change it). Press `Create` when finished to save the token in the store.
 
 ### 5.4. The pipeline code part 10: Web application performance analysis
 
-lorem ipsum
+To be able to run Lighthouse CI from the pipeline we must add a new container to the build pod:
+
+```groovy
+pipeline {
+    agent {
+        kubernetes {
+            defaultContainer 'jdk'
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: jdk
+      ...
+    - name: lhci
+      image: patrickhulce/lhci-client:0.12.0
+      command:
+        - cat
+      tty: true
+      securityContext:
+        runAsUser: 0
+        privileged: true
+  volumes:
+    - name: m2-cache
+...
+```
+
+In the `environment` block, let's get the two credentials that will be used later when the analysis is run:
+
+
+```groovy
+pipeline {
+    ...
+    environment {
+        ...
+        // credentials
+        KUBERNETES_CLUSTER_CRED_ID = 'k3s-lima-vm-kubeconfig'
+        CONTAINER_REGISTRY_CRED = credentials("docker-hub-$IMAGE_ORG")
+        LIGHTHOUSE_TOKEN = credentials("ci-lighthouse-token-$APP_NAME")
+        LIGHTHOUSE_URL = credentials('ci-lighthouse-url')
+    }
+    ...
+}
+```
+
+Executing an analysis with Lighthouse CI is a bit more elaborated than with other tools. While other analysis/scan tools typically infer the scope of the analysis/scan automatically from the contents of the workspace (that is, the checked out repository), Lighthouse CI requires to explicitely receive the page endpoint that must be analyzed.
+
+This is not a big deal, though, as using Groovy code it is very simple to iterate the call to Lighthouse CI over a list of page URLs. I would highly recommended to have that list externalized in a YAML or JSON file in the repository.
 
 ```groovy
     ...
@@ -834,7 +900,41 @@ lorem ipsum
     ...
 ```
 
-lorem ipsum
+As Lighthouse CI uses Git to extract relevant project information, it is required to set in Git the configuration parameter seen above, `safe.directory`, to allow for that.
+
+The analysis process has two steps: first the Lighthouse CI CLI tool will analyze and collect the relevant data, and next the data is uploaded to the Lighthouse CI server so it is available to the whole team.
+
+It is possible to set quality gates for Lighthouse CI. This is done by providing the tool with settings to set the threshold level. For more information on how this might be configured, you may check Lighthouse CI documentation here: [https://googlechrome.github.io/lighthouse-ci/docs/configuration.html#assert]
+
+Many times it would suffice to set the assertion level to the recommended rule set, using the following `lhci assert` command between `lhci collect` and `lhci upload`:
+
+```groovy
+    ...
+    stages {
+        ...
+        stage('Web page performance analysis') {
+            steps {
+                echo '-=- execute web page performance analysis -=-'
+                container('lhci') {
+                    sh """
+                      cd $WORKSPACE
+                      git config --global --add safe.directory $WORKSPACE
+                      export LHCI_BUILD_CONTEXT__CURRENT_BRANCH=$GIT_BRANCH
+                      lhci collect --collect.settings.chromeFlags='--no-sandbox' --url ${EPHTEST_BASE_URL}hello
+                      lhci assert --preset=lighthouse:recommended --includePassedAssertions
+                      lhci upload --token $LIGHTHOUSE_TOKEN --serverBaseUrl $LIGHTHOUSE_URL --ignoreDuplicateBuildFailure
+                    """
+                }
+            }
+        }
+        ...
+    }
+    ...
+```
+
+And with this change, let's launch the pipeline again and check whether everything went well end-to-end.
+
+Enjoy!
 
 --- END OF WORKSHOP ---
 
