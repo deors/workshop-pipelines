@@ -952,7 +952,7 @@ First, the JaCoCo agent must be added as a Maven dependency in `pom.xml`:
         <dependency>
             <groupId>org.jacoco</groupId>
             <artifactId>org.jacoco.agent</artifactId>
-            <version>0.8.8</version>
+            <version>0.8.10</version>
             <classifier>runtime</classifier>
             <scope>test</scope>
         </dependency>
@@ -972,7 +972,7 @@ To enable the gathering of code coverage metrics during unit tests, the agent pr
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.22.2</version>
                 <configuration>
-                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.8/org.jacoco.agent-0.8.8-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
+                    <argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.10/org.jacoco.agent-0.8.10-runtime.jar=destfile=${project.build.directory}/jacoco.exec</argLine>
                     <excludes>
                         <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
@@ -984,9 +984,9 @@ To enable the gathering of code coverage metrics during unit tests, the agent pr
     </build>
 ```
 
-For integration tests, the code coverage setup is a bit more complicated. Instead of enabling the agent in the test executor, it is the test server the process that must have the agent enabled. The former approach works for unit tests because the same JVM process holds both the test code and the code for the application being tested. However for integration tests, the test execution is a separate process from the application being tested.
+For integration tests, the code coverage setup is a bit more complicated. Instead of enabling the agent in the test executor, the process that must have the agent enabled is the test server. The former approach works for unit tests because the same JVM process holds both the test code and the code for the application being tested. However for integration tests, the test execution is a separate process from the application being tested.
 
-As the application is packaged and runs as a Docker image, the agent file must be present at the image build time. Later, during the execution of integration tests, the JaCoCo CLI tool will be needed to dump the coverage data from the test server. To do that, both dependencies will be copied into the expected folder with the help of the Maven Dependency plugin:
+As the application is packaged and runs as a container image, the agent file must be present at the image build time. Later, during the execution of integration tests, the JaCoCo CLI tool will be needed to dump the coverage data from the test server. To do that, both dependencies will be copied into the expected folder with the help of the Maven Dependency plugin:
 
 ```xml
     <build>
@@ -1008,14 +1008,14 @@ As the application is packaged and runs as a Docker image, the agent file must b
                                 <artifactItem>
                                     <groupId>org.jacoco</groupId>
                                     <artifactId>org.jacoco.agent</artifactId>
-                                    <version>0.8.8</version>
+                                    <version>0.8.10</version>
                                     <classifier>runtime</classifier>
                                     <destFileName>jacocoagent.jar</destFileName>
                                 </artifactItem>
                                 <artifactItem>
                                     <groupId>org.jacoco</groupId>
                                     <artifactId>org.jacoco.cli</artifactId>
-                                    <version>0.8.8</version>
+                                    <version>0.8.10</version>
                                     <classifier>nodeps</classifier>
                                     <destFileName>jacococli.jar</destFileName>
                                 </artifactItem>
@@ -1030,7 +1030,7 @@ As the application is packaged and runs as a Docker image, the agent file must b
     </build>
 ```
 
-And finally, the JaCoCo agent needs to be copied into the Docker image. Edit the file `Dockerfile` and add a new `ADD` instruction after `VOLUME`:
+And finally, the JaCoCo agent needs to be copied into the container image. Edit the file `Dockerfile` and add a new `ADD` instruction after `VOLUME`:
 
 ```dockerfile
     ...
@@ -1041,7 +1041,7 @@ And finally, the JaCoCo agent needs to be copied into the Docker image. Edit the
 
 ### A.2. Configuring Failsafe for integration test execution
 
-Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twin for integration tests, is disabled by default. To enable Failsafe, its targets must be called explicitely or alternatively may be binded to the corresponding lifecycle goals. To better control its execution in the pipeline it is preferred to disable Failsafe by default:
+Although Maven Surefire plugin is enabled by default, Failsafe, the Surefire twin for integration tests, is disabled by default. To enable Failsafe, its targets must be called explicitely or alternatively may be binded to the corresponding lifecycle goals. To better control its execution in the pipeline it is preferred to keep Failsafe disabled by default:
 
 ```xml
     <build>
@@ -1112,10 +1112,10 @@ It is also needed to enable JUnit 5 support in Pitest explicitly by adding the c
             <plugin>
                 <groupId>org.pitest</groupId>
                 <artifactId>pitest-maven</artifactId>
-                <version>1.5.2</version>
+                <version>1.14.1</version>
                 <configuration>
                     <excludedTestClasses>
-                        <param>*ApplicationTests</param>
+                        <param>*ApplicationTest</param>
                         <param>*IntegrationTest</param>
                     </excludedTestClasses>
                     <outputFormats>
@@ -1126,7 +1126,7 @@ It is also needed to enable JUnit 5 support in Pitest explicitly by adding the c
                     <dependency>
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-junit5-plugin</artifactId>
-                        <version>0.11</version>
+                        <version>1.2.0</version>
                     </dependency>
                 </dependencies>
             </plugin>
@@ -1152,7 +1152,7 @@ Adding support for Dependency Check scans is as simple as adding the correspondi
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>5.3.2</version>
+                <version>8.3.1</version>
                 <configuration>
                     <format>ALL</format>
                 </configuration>
