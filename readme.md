@@ -108,7 +108,9 @@ Expand the `Kubernetes Cloud details` section and pay special attention to these
 
 - The credential needed is the Kubeconfig file prepared a few steps before. Click on the `Add` button, select `Jenkins` as the credentials provider, select `Secret file` as the kind of credential, and upload the Kubeconfig from the folder where it was stored before. Choose a representative id for the credential (e.g., `k3s-lima-vm-kubeconfig`) and click on the `Add` button when finished.
 
-Use the `Test Connection` button to check that all settings are ok. Click on the `Save` button to finish the configuration.
+Finally, select the file uploaded in the Credentials selection and use the `Test Connection` button to check that all settings are ok. Click on the `Save` button to finish the configuration.
+
+> If you have a `Error testing connection : java.io.IOException: Connect timed out` message check the kubernetes cluster IP is correct 
 
 ### 1.5. Configure credentials for Docker Hub
 
