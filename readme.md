@@ -35,6 +35,8 @@ Next, we must override Lima settings to increase the max virtual memory areas va
 
 Alternatively, use the [`src/etc/k3s-lima-override.yaml`](src/etc/k3s-lima-override.yaml) file available in the repository. After the file is created, reset K3s for the changes to be applied.
 
+> Don't forget to replace `<<<username>>>` by your username
+
 To validate whether the changes are effectively applied, let's "jump" into the Lima VM by running this command:
 
     rdctl shell
@@ -48,7 +50,7 @@ The third step is to prepare the Kubeconfig file. When Rancher Desktop is instal
 
     rdctl shell sudo cat /etc/rancher/k3s/k3s.yaml
 
-That configuration file is not ready yet for our needs. If you check the settings, the server IP address is set to `127.0.0.1` and when later we use those settings to connect with the cluster API, it would not work. Therefore, the configuration must be updated to use the cluster IP address. To get that IP run this command:
+That configuration file is not ready yet for our needs. If you check the settings, the server IP address is set to `cf` and when later we use those settings to connect with the cluster API, it would not work. Therefore, the configuration must be updated to use the cluster IP address. To get that IP run this command in your terminal (use `exit` if you are still in Lima VM Shell):
 
     kubectl get services
 
@@ -56,9 +58,12 @@ The only service available at this point should be precisely the Kubernetes serv
 
 ### 1.2. Run Jenkins
 
-To run Jenkins, let's use the official image, adding a persistent volume for Jenkins data, and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in `src/etc` folder:
+To run Jenkins, let's use the official image, adding a persistent volume for Jenkins data, and routing through Traefik (which is available in Rancher Desktop out of the box). An exemplar YAML file with the needed configuration is available in [`src/etc`](src/etc/ci-jenkins.yaml) folder:
 
     kubectl apply -f src/etc/ci-jenkins.yaml
+
+> If you get a `Remote kubernetes server unreachable` check the IP in `~/.kube/config`
+> It's recommended to clone this repository or the src folder in your local machine instead of creating the files copying the content manually.
 
 To verify that the whole deployment was right, use the following command:
 
@@ -70,7 +75,7 @@ You should see that a pod, service, deployment, replica set, ingress, persistent
 
 Thanks to Traefik, we can access the Jenkins UI through `http://localhost/jenkins`. Alternatively, it is also possible to configure port forwarding in Rancher Desktop.
 
-On first run, Jenkins will show a wizard to configure the instance. This configuration needs to be done only on first run (unless the persistent volume is not configured properly as explained above).
+On first run, Jenkins is started and will show a wizard after `Please wait while Jenkins is getting ready to work ...` to configure the instance. This configuration needs to be done only on first run (unless the persistent volume is not configured properly as explained above).
 
 The first step is to confirm the initial administrator password which is kept safe in the `jenkins-home` volume. You may get that password with any of these commands (remember that we mapped the volume to a folder in our workstation):
 
@@ -164,7 +169,7 @@ A Jenkins pipeline, written in the form of a declarative pipeline with a rich DS
 
 Jenkins pipelines are written in Groovy (pipelines as code), and the pipeline DSL is designed to be pluggable, so any given plugin may contribute with its own idioms to the pipeline DSL, as well as extended through custom functions bundled in Jenkins libraries.
 
-The combination of a powerful dynamic language as Groovy, with the rich semantics of the available DSLs, allows developers to write simple, expressive pipelines, while having all the freedom to customize the pipeline behavior up to the smallest detail.
+The combination of a powerful dynamic language as Groovy, with the rich semantics of the available DSLs, allows developers to write simple, expressive pipelines, while having all the freedom to customize the pipeline behaviour up to the smallest detail.
 
 The pipeline main construct is the `pipeline` block element. Inside any `pipeline` element there will be any number of second-level constructs, being the main ones:
 
@@ -232,7 +237,7 @@ Code inspection tasks are basically three:
 Testing tasks will include the following:
 
 - **Unit tests**: Those that run at the component or function level, not requiring any dependency to be available at test time. E.g., simple tests on a class or specific methods.
-- **Unit-integration tests**: Those that, although not requiring the application to be deployed, are testing multiple components together. For example, in-container tests. In terms of the technical mechanism to run these tests, they may be indistinguisable from unit tests. In practice, many times they will be executed altogether (e.g., run `mvn test` command).
+- **Unit-integration tests**: Those that, although not requiring the application to be deployed, are testing multiple components together. For example, in-container tests. In terms of the technical mechanism to run these tests, they may be indistinguishable from unit tests. In practice, many times they will be executed altogether (e.g., run `mvn test` command).
 - **Integration tests**: In this group are included all those tests that require the application to be deployed and with its internal dependencies integrated (including data stores such as a relational database). Typically external dependencies will be mocked up in this step (e.g., a third-pary billing system). Integration tests will include API tests and UI tests, but may require of other specialized tests (e.g., to test batch processes).
 - **Performance tests**: Tests verifying how the service or component behaves under load. Performance tests in this step are not meant to assess the overall system capacity (which can be virtually infinite with the appropriate scaling patterns), but to assess the capacity of single instances, uncover concurrence issues due to the parallel execution of tasks, as well as to pinpoint possible bottlenecks or resource leaks when studying the trend. Very useful at this step to leverage APM tools to gather internal JVM metrics, e.g. to analyze gargabe collection pauses and effectiveness.
 - **Security tests**: Tests assessing possible vulnerabilities exposed by the application. In this step, the kind of security tests performed are typically DAST analysis.
@@ -245,7 +250,7 @@ In addition to the previous kinds of tests, there is one more which is meant to 
 
 To enable these tools along the lifecycle, and to align developer workstation build results with CI server build results, the recommended approach is to configure these activities with the appropriate development lifecycle tools.
 
-For example, in the case of the Java ecosystem, a wise choice is to leverage the Apache Maven lifecycle as modeled in the `pom.xml` file, while storing the corresponding test scripts, data and configuration in the `src/test` folder (very commonly done for unit tests, and also recommended for the other kinds of tests), altogether in the same repository as application source code.
+For example, in the case of the Java ecosystem, a wise choice is to leverage the Apache Maven lifecycle as modelled in the `pom.xml` file, while storing the corresponding test scripts, data and configuration in the `src/test` folder (very commonly done for unit tests, and also recommended for the other kinds of tests), altogether in the same repository as application source code.
 
 Although it is not the purpose of this workshop to go into Maven details, I have provided at the end of the workshop guideline an appendix about specific Maven configurations and how they enable tool integration as described above.
 
@@ -261,7 +266,7 @@ The stages that are proposed as a best practice, are the following:
 - **Build Docker image**: This stage will create the application image by putting together all pieces required: a base image, the build artifacts that were packaged in the previous stage, and any dependencies needed (e.g. third-party libraries).
 - **Run Docker image**: This stage will prepare the test environment for the following stages. This stage tests whether the application actually runs and then makes it available for the tests.
 - **Integration tests**: This stage will execute integration tests on the test environment just provisioned. As with unit tests, code coverage metrics should be gathered.
-- **Performance tests**: This stage will run tests to validate the application behavior under load. This kind of tests, although provides with useful information on response times, are better used to uncover any issue due to concurrent usage.
+- **Performance tests**: This stage will run tests to validate the application behaviour under load. This kind of tests, although provides with useful information on response times, are better used to uncover any issue due to concurrent usage.
 - **Dependency vulnerability tests**: This stage is used to assess the application vulnerabilities and determine whether there are known security vulnerabilities which should prevent the application to be deployed any further.
 - **Code inspection**: This stage is used to run static code analysis and gather useful metrics (like object-oriented metrics). Typically this stage will also include observations from previous stages to calculate the final quality gate for the build.
 - **Push Docker image**: The final stage, if all quality gates are passed, is to push the image to a shared registry, from where it is available during tests to other applications that depend on this image, as well as to be promoted to stage or production environments.
@@ -361,7 +366,7 @@ def getPomArtifactId() {
 }
 ```
 
-As explained above, although not mandatory many of these environment variables are useful as they allows for the pipeline to be easily reusable across projects. Everything that is project-dependant is configured as a variable, and extracted from sources (e.g., the POM file) whenever possible.
+As explained above, although not mandatory many of these environment variables are useful as they allow for the pipeline to be easily reusable across projects. Everything that is project-dependant is configured as a variable, and extracted from sources (e.g., the POM file) whenever possible.
 
 As can be seen above, all secrets are injected from the Jenkins credentials manager. It is generally advisable to use an external secret management tool as Jenkins own manager is not the most secure. However it is good enough for now, and promotes the best practice to never, ever, store any secret or sensitive information in the pipeline, which is expected to be in version control.
 
@@ -549,7 +554,7 @@ The following two stages will execute the integration and performance tests, onc
     ...
 ```
 
-There a few outstanding pieces that are worth noting.
+There are a few outstanding pieces that are worth noting.
 
 Before the integration tests are launched, it is good idea to ensure that the application is fully initialised and responding. The `kubectl run` command will return once the pod is scheduled, but this does not mean that the application is up and running and able to respond to requests. With a simple `curl` command it is possible to configure the pipeline to wait for the application to be available.
 
@@ -584,7 +589,7 @@ To enable the quality gates, use this alternate version of the call to `perfRepo
 
 At this point of the pipeline, the application has been built, packaged, deployed and tested in different ways. If tests have passed and quality gates are ok, this means that the application container image is ready to be promoted. Typically, a release candidate (RC) or generally available (GA) status and flag is used.
 
-Thos flags are used to differentiate a development build (or snapshot), from a validated, production-ready build (and thus, potentially shippable), or something intermediate that may still require further validation by the business. Depending on how the release process is shaped, and how confident the team is with the automated test suite, the release process may require of user acceptance tests or other kinds of decision making (including the product owner/manager approving the release).
+Those flags are used to differentiate a development build (or snapshot), from a validated, production-ready build (and thus, potentially shippable), or something intermediate that may still require further validation by the business. Depending on how the release process is shaped, and how confident the team is with the automated test suite, the release process may require of user acceptance tests or other kinds of decision making (including the product owner/manager approving the release).
 
 In this case, the container image will be tagged as 'GA' and artifact version number, as well as with a second tag identifying the image as the latest 'GA' available.
 
@@ -696,7 +701,7 @@ Next, let's add the SonarQube instance name and URL. To ensure that the right se
 
 Now that Jenkins and SonarQube are both configured, let's add a stage to the pipeline to execute code inspection with SonarQube. SonarQube analysis includes static security vulnerability analysis, as well as additional analysis provided by third-party tools (enabled through plugins) such as PMD or SpotBugs. Additionally, any compound quality gate defined in SonarQube for the technology or project will also be checked and will cause the build to stop if not passed.
 
-Where should this stage be placed? This is a very good question. Some people recommends to run the code analysis after the unit tests and before packaging the application. This is a good general approach but it has a disadvantage: quality gates cannot use integration test results (e.g., the code coverage gathered after Selenium tests are executed).
+Where should this stage be placed? This is a very good question. Some people recommend to run the code analysis after the unit tests and before packaging the application. This is a good general approach but it has a disadvantage: quality gates cannot use integration test results (e.g., the code coverage gathered after Selenium tests are executed).
 
 Considering that, I recommend to put this stage after integration & performance tests, and before the container image is promoted to 'GA' status.
 
@@ -726,7 +731,7 @@ It's worth noting that the code analysis and calculation of the quality gate by 
 
 The pipeline code therefore sets a wait time for SonarQube to 'call back home' using the configured webhook, and unpause to continue evaluating the quality gate results, as well as any further stages pending in the pipeline.
 
-The default behavior for SonarQube quality gate, as coded in the `waitForQualityGate` function, is to break the build in case any of the thresholds defined in the gate is not achieved.
+The default behaviour for SonarQube quality gate, as coded in the `waitForQualityGate` function, is to break the build in case any of the thresholds defined in the gate is not achieved.
 
 ### 4.5. The pipeline code part 9: Software composition analysis
 
@@ -875,7 +880,7 @@ pipeline {
 
 Executing an analysis with Lighthouse CI is a bit more elaborated than with other tools. While other analysis/scan tools typically infer the scope of the analysis/scan automatically from the contents of the workspace (that is, the checked out repository), Lighthouse CI requires to explicitely receive the page endpoint that must be analyzed.
 
-This is not a big deal, though, as using Groovy code it is very simple to iterate the call to Lighthouse CI over a list of page URLs. I would highly recommended to have that list externalized in a YAML or JSON file in the repository.
+This is not a big deal, though, as using Groovy code it is very simple to iterate the call to Lighthouse CI over a list of page URLs. I would highly recommend to have that list externalized in a YAML or JSON file in the repository.
 
 ```groovy
     ...
