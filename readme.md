@@ -2,15 +2,15 @@
 
 Workshop on Jenkins CI/CD pipelines.
 
-Workshop delivered in UMA Hackers Week 6 and in OpenSouthCode 2019 leveraging Docker as the container runtime.
+Workshop delivered in [UMA Hackers Week 6](https://www.eventbrite.com/e/entradas-pipelines-de-entrega-continua-multilenguaje-con-jenkisn-y-dockers-59633393084?aff=odcleoeventsincollection&keep_tld=1) and in [OpenSouthCode 2019](https://www.opensouthcode.org/conferences/opensouthcode2019/program/proposals/176) leveraging Docker as the container runtime.
 
-Major workshop refresh delivered first in OpenSlava 2023 leveraging Kubernetes via Rancher Desktop and K3s.
+Major workshop refresh delivered first in [OpenSlava 2023](https://www.openslava.sk/2023/#/program/76b23f6c-414b-453b-922e-258cd3d10955) leveraging Kubernetes via Rancher Desktop and K3s.
 
 ## Part 1. Preparing for the workshop
 
-Rancher Desktop is the only pre-requisite. This workshop has been tested to work with Rancher Desktop 1.10 on macOS Ventura 13.6. It should work on any other Rancher Desktop environment, K3s, or even vanilla Kubernetes.
+[Rancher Desktop](https://rancherdesktop.io/) is the only pre-requisite. This workshop has been tested to work with Rancher Desktop 1.10 on macOS Ventura 13.6 with admin rights. It should work on any other Rancher Desktop environment, K3s, or even vanilla Kubernetes.
 
-If using a managed Kubernetes cluster, it is likely that there some important services, such as authentication or networking, coupled to the specific platform. If that is your case, you may continue to leverage large portions of the workshop, but the necessary adaptations will not be covered here.
+If using a managed Kubernetes cluster, it is likely that there are some important services, such as authentication or networking, coupled to the specific platform. If that is your case, you may continue to leverage large portions of the workshop, but the necessary adaptations will not be covered here.
 
 ### 1.1. Configure K3s
 
@@ -33,7 +33,7 @@ Next, we must override Lima settings to increase the max virtual memory areas va
     mountPoint: /data
     writable: true
 
-Alternatively, use the `src/etc/k3s-lima-override.yaml` file available in the repository. After the file is created, reset K3s for the changes to be applied.
+Alternatively, use the [`src/etc/k3s-lima-override.yaml`](src/etc/k3s-lima-override.yaml) file available in the repository. After the file is created, reset K3s for the changes to be applied.
 
 To validate whether the changes are effectively applied, let's "jump" into the Lima VM by running this command:
 
