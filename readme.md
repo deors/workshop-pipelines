@@ -132,12 +132,12 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
-containers:
+  containers:
     - name: jdk
-    image: docker.io/eclipse-temurin:20.0.1_9-jdk
-    command:
+      image: docker.io/eclipse-temurin:20.0.1_9-jdk
+      command:
         - cat
-    tty: true
+      tty: true
 '''
         }
     }
