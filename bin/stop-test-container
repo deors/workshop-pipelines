@@ -1,2 +1,2 @@
 #!/bin/bash
-docker stop test-workshop-pipelines
+docker stop test-deors-demos-java-pipeline

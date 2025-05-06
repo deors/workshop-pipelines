@@ -4,7 +4,7 @@ performance:
       unstable: 0
       failed: 5
     response:
-      unstable: "default.jtl:100"
+      unstable: 'default.jtl:100'
 
 security:
   static:
@@ -23,11 +23,11 @@ security:
       failed: 5
   dependencies:
     critical:
-      unstable: 4
-      failed: 4
-    high:
-      unstable: 0
-      failed: 0
-    medium:
       unstable: 5
       failed: 5
+    high:
+      unstable: 5
+      failed: 5
+    medium:
+      unstable: 15
+      failed: 15
